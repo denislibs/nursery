@@ -1,16 +1,26 @@
 # Vue 3
 
-Аналог React-эффекта во Vue это `watchEffect` с `onCleanup`, либо `onScopeDispose` для
-композаблов. Скоуп scopekit привязывается к ним.
+Композаблы поставляются как `scopekit/vue`.
 
 ```ts
-import { ref, watch, watchEffect, onScopeDispose, shallowRef, type Ref } from 'vue';
-import { Scope, type ScopeOptions } from 'scopekit/scope';
-import { latest } from 'scopekit/latest';
-import { isAbort } from 'scopekit/signal';
+import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorker } from 'scopekit/vue';
 ```
 
+| Композабл | Что делает |
+|---|---|
+| `useScope()` | скоуп, который закрывается в `onScopeDispose` |
+| `useScopedWatch(fn)` | `watchEffect` со скоупом; перезапуск закрывает предыдущий |
+| `useAsync(fn)` | `{ data, error, loading }` как refs, результат отменённого запуска не попадает в refs |
+| `useLatest(fn)` | `{ run, pending, cancel }`, `pending` это `Ref<boolean>` |
+| `useEventStream(elRef, type, handler)` | события с элемента из `ref`, подписка появляется, когда элемент смонтирован |
+| `useWorker(factory)` | воркер на время жизни компонента |
+
+Зависимости `useScopedWatch` и `useAsync` собираются из синхронной части функции: читайте
+`props.id` до первого `await`.
+
 ## useScope: скоуп на компонент
+
+Так композаблы устроены внутри, если нужна своя версия:
 
 ```ts
 export function useScope(opts?: ScopeOptions): Scope {

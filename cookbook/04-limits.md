@@ -174,3 +174,18 @@ Fail-fast скоупа и лимит семафора работают вмес�
 - **`Promise.all(items.map(...))` для сотен запросов.** Браузер сам ограничит HTTP/1.1
   шестью соединениями, но очередь уже будет в неконтролируемом состоянии, и отмена не
   сработает для тех, кто ещё не начал. `map` с `concurrency` решает обе проблемы.
+
+## Приоритеты в Queue
+
+Картинки в видимой области должны грузиться раньше остальных:
+
+```ts
+const images = new Queue({ concurrency: 4, signal: scope.signal });
+
+function load(img: HTMLImageElement, visible: boolean) {
+  return images.add(sig => fetchImage(img.dataset.src!, sig), { priority: visible ? 10 : 0 });
+}
+```
+
+Среди ожидающих первым стартует задача с большим `priority`, при равенстве порядок FIFO.
+Уже выполняющиеся задачи приоритет не трогает.

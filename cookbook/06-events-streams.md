@@ -169,3 +169,51 @@ for await (const msg of pipe(messages(ws, scope.signal), filter(isChatMessage)))
 
 Все операторы корректно завершают источник, если потребитель вышел из цикла. `debounce`
 и `throttle` очищают свои таймеры. Тест на это есть в `test/iter.test.ts`.
+
+## Дополнительные операторы
+
+```ts
+import { distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from 'scopekit/iter';
+```
+
+| Оператор | Что делает |
+|---|---|
+| `distinctUntilChanged(eq?)` | пропускает значения, равные предыдущему |
+| `scan(fn, seed)` | накопитель, отдаёт промежуточные значения |
+| `tap(fn)` | побочный эффект без изменения потока |
+| `merge(a, b, ...)` | сливает несколько источников по мере поступления |
+| `flatMap(fn, { concurrency })` | разворачивает вложенные итераторы с лимитом параллелизма |
+| `timeout(ms)` | `TimeoutError`, если между значениями тишина дольше `ms` |
+| `fromReadableStream(rs)` | `ReadableStream` как `AsyncIterable`, с отменой при выходе, нужно для Safari |
+
+Поиск с дедупликацией одинаковых запросов подряд:
+
+```ts
+for await (const q of pipe(on<InputEvent>(input, 'input', { signal }),
+                           map(e => (e.target as HTMLInputElement).value.trim()),
+                           debounce(300),
+                           distinctUntilChanged())) {
+  search(q).then(render).catch(ignoreAbort);
+}
+```
+
+Слить несколько WebSocket-ов в один поток с таймаутом на тишину:
+
+```ts
+const all = pipe(merge(messages(wsA, signal), messages(wsB, signal)), timeout(30_000));
+```
+
+## select: первый из нескольких каналов
+
+```ts
+import { select } from 'scopekit/events';
+
+for (;;) {
+  const r = await select([jobs, controls], signal);
+  if (r.index === -1) break;                     // все каналы закрыты
+  if (r.index === 0) await handle(r.value);      // r.value типизирован как Job
+  else applyControl(r.value);                    // как Control
+}
+```
+
+Из проигравших каналов ничего не забирается: их значение остаётся следующему `receive`.

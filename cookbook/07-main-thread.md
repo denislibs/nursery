@@ -93,3 +93,16 @@ React, Vue и остальные батчат обновления. Вызов `
 итерации сработает, но каждая уступка главному потоку даст фреймворку возможность
 отрендерить промежуточное состояние. Обычно это желаемое поведение (прогресс-бар).
 Если нет, копите результат и делайте один `setState` в конце.
+
+## postTask: приоритеты
+
+```ts
+import { postTask } from 'scopekit/schedule';
+
+await postTask(() => renderVisibleRows(), { priority: 'user-blocking', signal });
+await postTask(() => warmCache(), { priority: 'background', signal, delay: 500 });
+```
+
+На `scheduler.postTask` приоритет отдаётся браузеру. Без него задачи встают в очередь
+макрозадач, но порядок `user-blocking` → `user-visible` → `background` среди уже
+запланированных сохраняется.

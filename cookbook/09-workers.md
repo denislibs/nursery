@@ -154,3 +154,37 @@ remote[Symbol.dispose](); stop(); port1.close(); port2.close();
 ```
 
 Настоящий `Worker` покрыт браузерными тестами в `test/browser/worker.browser.test.ts`.
+
+## transfer: перемещать буферы вместо копирования
+
+```ts
+import { transfer } from 'scopekit/worker';
+
+const pixels = new Uint8ClampedArray(w * h * 4);
+const out = await remote.blur(transfer({ pixels, w, h }, [pixels.buffer]), { signal });
+// pixels.buffer.byteLength === 0: буфер уехал в воркер
+
+// и обратно
+export const api = {
+  async blur(img: { pixels: Uint8ClampedArray; w: number; h: number }) {
+    const result = process(img);
+    return transfer(result, [result.pixels.buffer]);
+  },
+};
+```
+
+## callback: прогресс и вопросы из воркера
+
+```ts
+import { callback } from 'scopekit/worker';
+
+await remote.index(files, {
+  signal,
+  onProgress: callback((done: number, total: number) => setProgress(done / total)),
+  confirmOverwrite: callback(async (path: string) => confirm(`Перезаписать ${path}?`)),
+});
+```
+
+В воркере колбэк это async-функция: вызов уходит в главный поток, результат возвращается
+промисом. Колбэки живут, пока живёт вызов, который их принёс; после его завершения ссылки
+освобождаются.

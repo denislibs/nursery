@@ -33,12 +33,14 @@ import { createHttp } from 'scopekit/http';
 | `combine` | `withTimeout`, `retry`, `race`, `settle` |
 | `limit` | `Semaphore`, `Mutex`, `map`, `mapSettled`, `Queue` |
 | `latest` | `latest`, `singleFlight` |
-| `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError` |
-| `events` | `on`, `Channel`, `ChannelClosedError` |
-| `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `toArray` (namespace `iter`) |
-| `schedule` | `yieldToMain`, `idle`, `frame`, `chunked` |
+| `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError`, `ScopeStuckError` |
+| `events` | `on`, `Channel`, `select`, `ChannelClosedError` |
+| `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
+| `schedule` | `yieldToMain`, `postTask`, `idle`, `frame`, `chunked` |
 | `http` | `createHttp`, `HttpError` |
-| `worker` | `expose`, `wrap` |
+| `worker` | `expose`, `wrap`, `transfer`, `callback` |
+| `react` | `ScopeProvider`, `useScope`, `useScopedEffect`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
+| `vue` | `useScope`, `useScopedWatch`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
 
 ## Scope
 
@@ -174,6 +176,23 @@ const parser = wrap<typeof import('./worker.js')['api']>(new Worker('./worker.js
 const ast = await parser.parse(src, { signal: scope.signal }); // abort доходит до воркера
 parser[Symbol.dispose]();
 ```
+
+## React и Vue
+
+```ts
+import { useAsync, useLatest, useEventStream } from 'scopekit/react';
+
+const orders = useAsync(scope => http.get<Order[]>('/orders', { scope }), [userId]);
+const { run: search, pending } = useLatest((q: string, sig) => http.get<Item[]>('/search', { signal: sig, query: { q } }));
+useEventStream<KeyboardEvent>(window, 'keydown', e => { if (e.key === 'Escape') close(); });
+```
+
+```ts
+import { useAsync, useLatest } from 'scopekit/vue';
+const { data, loading } = useAsync(scope => http.get<User>(`/users/${props.id}`, { scope }));
+```
+
+Оба адаптера это optional peer dependencies, ставятся вместе с `react` или `vue`.
 
 ## Разработка
 

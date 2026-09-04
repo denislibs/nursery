@@ -191,3 +191,58 @@ const http = createHttp({
 - Не ретраит по умолчанию небезопасные методы.
 - Не следит за куками и CSRF: передайте `credentials: 'include'` и заголовок как обычно,
   всё из `RequestInit` проходит насквозь.
+
+## Хуки onRequest и onResponse
+
+Вместо обёртки над `fetch`:
+
+```ts
+const http = createHttp({
+  baseUrl,
+  onRequest: (url, init) => ({ init: { ...init, headers: { ...headersOf(init), authorization: `Bearer ${getToken()}` } } }),
+  onResponse: (res, { attempt }) => { metrics.http(res.status, attempt); return res; },
+});
+```
+
+`onRequest` может быть async и вернуть новый `url` и/или `init`. `onResponse` вызывается на
+каждую попытку до решения о ретрае и может подменить `Response`.
+
+## Валидация ответа
+
+Опция `parse` принимает функцию или объект с `parse()`, то есть любую zod/valibot-схему.
+Тип результата выводится из схемы:
+
+```ts
+const User = z.object({ id: z.number(), name: z.string() });
+const user = await http.get('/users/1', { scope, parse: User });   // тип z.infer<typeof User>
+```
+
+Ошибка схемы отвергает запрос, у неё есть поле `response` с исходным ответом.
+
+## Владелец запроса: signal, scope, deadline
+
+Вместо `signal` можно передать `scope`: клиент возьмёт `scope.signal` и `scope.deadline`.
+Если у скоупа осталось две секунды, попытка не будет ждать пятнадцать:
+
+```ts
+await using scope = new Scope({ timeout: 2000 });
+await http.get('/slow', { scope });            // TimeoutError через 2 с, не через 15
+```
+
+`deadline` можно передать и явно, это абсолютное время по `performance.now()`. Просроченный
+дедлайн отвергает запрос до `fetch`, ретраи после дедлайна не делаются.
+
+## NDJSON и Server-Sent Events
+
+```ts
+for await (const row of http.stream<Row>('/export', { scope })) append(row);
+
+for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000, maxDelay: 30_000 } })) {
+  if (e.event === 'order') handle(JSON.parse(e.data));
+}
+```
+
+`sse` идёт через `fetch`, поэтому работают заголовки авторизации, чего `EventSource` не умеет.
+При обрыве без отмены и включённом `reconnect` соединение переоткрывается с `Last-Event-ID`,
+задержка берётся из поля `retry:`, если сервер его прислал. `break` из цикла отменяет тело
+ответа.

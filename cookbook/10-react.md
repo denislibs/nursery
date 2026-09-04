@@ -1,16 +1,28 @@
 # React
 
-Идея одна: **скоуп живёт столько же, сколько эффект**. Всё остальное это хуки поверх этого.
+Хуки поставляются как `scopekit/react`. Идея одна: **скоуп живёт столько же, сколько эффект**,
+всё остальное надстройки.
 
 ```ts
-import { useEffect, useState, useRef, useCallback, useSyncExternalStore, type DependencyList } from 'react';
-import { Scope, type ScopeOptions } from 'scopekit/scope';
-import { latest } from 'scopekit/latest';
-import { isAbort } from 'scopekit/signal';
-import { on } from 'scopekit/events';
+import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEventStream, useWorker } from 'scopekit/react';
 ```
 
+| Хук | Что делает |
+|---|---|
+| `useScopedEffect(fn, deps)` | `useEffect`, где `fn` получает `Scope`; предыдущий скоуп закрывается на cleanup |
+| `useAsync(fn, deps)` | `{ status: 'loading' \| 'success' \| 'error' }`, результат отменённого запуска не попадает в state |
+| `useLatest(fn)` | `{ run, pending, cancel }`: новый `run` отменяет прошлый, unmount отменяет последний |
+| `useEventStream(target, type, handler)` | события DOM в цикле `for await`, handler может быть async |
+| `useScope()` | скоуп на время монтирования, ребёнок ближайшего `ScopeProvider` |
+| `ScopeProvider` | родительский скоуп для всего поддерева, даёт контекст и общую отмену |
+| `useWorker(factory)` | воркер создаётся один раз, `terminate` на unmount |
+
+Ошибки эффектов, кроме отмены, уходят в `Scope.onUnhandled`. StrictMode в dev монтирует дважды,
+хуки это учитывают: первый скоуп закрывается, второй работает.
+
 ## useScopedEffect: базовый хук
+
+Так он устроен внутри, если захочется свою версию:
 
 ```ts
 export function useScopedEffect(
@@ -97,56 +109,27 @@ const page = useAsync(async scope => {
 }, []);
 ```
 
-## useLatestCallback: поиск без гонок
+## useLatest: поиск без гонок
 
 Для действий, которые инициирует пользователь, а не рендер:
-
-```ts
-export function useLatestCallback<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>) {
-  const fnRef = useRef(fn);
-  fnRef.current = fn;
-  const wrapped = useRef(latest<A, R>((arg, signal) => fnRef.current(arg, signal))).current;
-  useEffect(() => () => wrapped.cancel(), [wrapped]);
-  return wrapped;
-}
-```
 
 ```tsx
 function Search() {
   const [results, setResults] = useState<Item[]>([]);
-  const search = useLatestCallback((q: string, signal) => http.get<Item[]>('/search', { signal, query: { q } }));
+  const { run: search, pending } = useLatest((q: string, signal) => http.get<Item[]>('/search', { signal, query: { q } }));
 
   return (
     <>
       <input onChange={e => search(e.target.value).then(setResults).catch(ignoreAbort)} />
-      {search.pending && <Spinner />}
+      {pending && <Spinner />}
       <List items={results} />
     </>
   );
 }
 ```
 
-Новый ввод отменяет предыдущий запрос, unmount отменяет последний. `search.pending`
-читается при рендере, но не является реактивным. Для спиннера, который обновляется без
-лишнего `setState`, см. `useLatestState` ниже.
-
-## useLatestState: pending как состояние
-
-```ts
-export function useLatestState<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>) {
-  const [pending, setPending] = useState(false);
-  const run = useLatestCallback(fn);
-  const call = useCallback(async (arg: A) => {
-    setPending(true);
-    try {
-      return await run(arg);
-    } finally {
-      if (!run.pending) setPending(false);   // false только когда никто не в полёте
-    }
-  }, [run]);
-  return [call, pending] as const;
-}
-```
+Новый ввод отменяет предыдущий запрос, unmount отменяет последний. `pending` реактивный:
+становится `false`, только когда ни один вызов не в полёте.
 
 ## useEventStream: события DOM как цикл
 
@@ -260,31 +243,25 @@ useQuery({
 сигналом. Retry и дедупликацию оставьте одному слою: либо Query, либо `http`, иначе
 попытки перемножатся.
 
-## Контекст скоупа через React Context
-
-Скоуп страницы, к которому подключаются дочерние скоупы компонентов:
+## ScopeProvider: скоуп страницы
 
 ```tsx
-const ScopeContext = createContext<Scope | null>(null);
-
-export function ScopeProvider({ children, ...opts }: PropsWithChildren<ScopeOptions>) {
-  const [scope] = useState(() => new Scope(opts));
+function Page() {
+  const [scope] = useState(() => new Scope({ name: 'page', ctx: [TraceId.with(newTraceId())], grace: 5000 }));
   useEffect(() => () => { void scope.close(); }, [scope]);
-  return <ScopeContext.Provider value={scope}>{children}</ScopeContext.Provider>;
+  return <ScopeProvider scope={scope}><Dashboard /></ScopeProvider>;
 }
 
-export function useScopedEffectIn(effect: (scope: Scope) => void | Promise<void>, deps: DependencyList) {
-  const parent = useContext(ScopeContext);
-  useEffect(() => {
-    const scope = parent ? parent.child() : new Scope();
-    Promise.resolve(effect(scope)).catch(err => { if (!isAbort(err)) reportError(err); });
-    return () => { void scope.close(); };
-  }, deps);
+function Dashboard() {
+  const scope = useScope();                 // ребёнок скоупа страницы
+  const trace = scope.get(TraceId);
+  useScopedEffect(async s => { /* s тоже ребёнок страницы */ }, []);
 }
 ```
 
-Теперь `TraceId` и прочие ключи контекста доступны в любом компоненте через
-`scope.get(TraceId)`, а закрытие провайдера отменяет всё дерево.
+Все хуки под провайдером создают дочерние скоупы: контекст наследуется, закрытие скоупа
+страницы отменяет всё дерево, а `scope.dump()` на странице показывает, какие компоненты и
+задачи ещё живы.
 
 ## Suspense и use()
 
