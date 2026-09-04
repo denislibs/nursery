@@ -295,7 +295,10 @@ export function flatMap<T, R>(
       void (async () => {
         try {
           for (;;) {
-            while (!stopped && active >= concurrency) await new Promise<void>(r => waiters.push(r));
+            for (;;) {
+              if (stopped || active < concurrency) break;
+              await new Promise<void>(r => waiters.push(r));
+            }
             if (stopped) return;
             const r = await it.next();
             if (stopped) return;

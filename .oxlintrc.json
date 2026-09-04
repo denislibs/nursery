@@ -26,7 +26,8 @@
     "no-console": "error",
     "typescript/no-unsafe-type-assertion": "off",
     "no-await-in-loop": "off",
-    "unicorn/require-post-message-target-origin": "off"
+    "unicorn/require-post-message-target-origin": "off",
+    "typescript/no-unnecessary-type-parameters": "off"
   },
   "overrides": [
     {

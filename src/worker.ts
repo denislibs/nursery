@@ -168,7 +168,7 @@ function transferOf(value: unknown): Transferable[] | undefined {
  * AbortSignals arrive live; callback() arguments arrive as async functions; transfer() is honoured
  * for return values.
  */
-export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalThis): () => void {
+export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalThis as unknown as Endpoint): () => void {
   const running = new Map<number, AbortController[]>();
   const cbPending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
   let cbCallCounter = 0;
