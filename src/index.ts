@@ -8,3 +8,7 @@ export { latest, singleFlight } from './latest.js';
 export type { LatestFn, SingleFlightOptions } from './latest.js';
 export { Scope, ScopeClosedError, ContextKey, contextKey } from './scope.js';
 export type { ScopeOptions, ScopedTask, ContextBinding } from './scope.js';
+export { on, Channel, ChannelClosedError } from './events.js';
+export type { OnOptions } from './events.js';
+export * as iter from './iter.js';
+export type { Op, BufferSpec } from './iter.js';
