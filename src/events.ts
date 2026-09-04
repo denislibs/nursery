@@ -13,6 +13,12 @@ export interface OnOptions extends AddEventListenerOptions {
  * Events that arrive while the consumer is busy are queued. The listener is removed when the
  * consumer breaks out of the loop or the signal aborts; abort ends the loop instead of throwing.
  */
+export function on<K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, opts?: OnOptions): AsyncIterable<HTMLElementEventMap[K]>;
+export function on<K extends keyof DocumentEventMap>(target: Document, type: K, opts?: OnOptions): AsyncIterable<DocumentEventMap[K]>;
+export function on<K extends keyof WindowEventMap>(target: Window, type: K, opts?: OnOptions): AsyncIterable<WindowEventMap[K]>;
+export function on<K extends keyof WebSocketEventMap>(target: WebSocket, type: K, opts?: OnOptions): AsyncIterable<WebSocketEventMap[K]>;
+export function on<K extends keyof WorkerEventMap>(target: Worker, type: K, opts?: OnOptions): AsyncIterable<WorkerEventMap[K]>;
+export function on<E extends Event = Event>(target: EventTarget, type: string, opts?: OnOptions): AsyncIterable<E>;
 export function on<E extends Event = Event>(
   target: EventTarget,
   type: string,
@@ -78,6 +84,16 @@ interface Waiter<T> {
   reject: (e: unknown) => void;
   detach: () => void;
 }
+
+// Channel is invariant in T because of its private fields, so a heterogeneous tuple needs `any`.
+// oxlint-disable-next-line typescript/no-explicit-any
+export type AnyChannel = Channel<any>;
+
+type SelectAny = { index: number; value: unknown } | { index: -1; closed: true };
+
+export type SelectResult<T extends readonly AnyChannel[]> =
+  | { [K in keyof T]: T[K] extends Channel<infer V> ? { index: K extends `${infer N extends number}` ? N : number; value: V } : never }[number]
+  | { index: -1; closed: true };
 
 /**
  * Go-style channel with backpressure. `capacity` 0 (default) is a rendezvous: send() waits for
@@ -148,6 +164,65 @@ export class Channel<T> implements AsyncIterable<T> {
     });
   }
 
+  /**
+   * Waits for the first channel that can deliver a value (Go's select). Nothing is consumed
+   * from the others. Resolves `{ index: -1, closed: true }` once every channel is closed and empty.
+   */
+  static select<const T extends readonly AnyChannel[]>(channels: T, signal?: MaybeSignal): Promise<SelectResult<T>> {
+    return Channel.#selectAny(channels, signal) as Promise<SelectResult<T>>;
+  }
+
+  static #selectAny(channels: readonly AnyChannel[], signal: MaybeSignal): Promise<SelectAny> {
+    if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
+    for (let index = 0; index < channels.length; index++) {
+      const ch = channels[index]!;
+      if (ch.#buffer.length > 0 || ch.#senders.length > 0) {
+        return ch.receive().then((value: unknown) => ({ index, value }));
+      }
+    }
+    if (channels.every(ch => ch.#closed)) return Promise.resolve({ index: -1, closed: true });
+    return new Promise<SelectAny>((resolve, reject) => {
+      const entries: Array<[AnyChannel, Waiter<unknown>]> = [];
+      const detachAll = () => {
+        for (const [ch, e] of entries) {
+          const i = ch.#receivers.indexOf(e);
+          if (i >= 0) ch.#receivers.splice(i, 1);
+        }
+        entries.length = 0;
+        signal?.removeEventListener('abort', onAbort);
+      };
+      const onAbort = () => {
+        detachAll();
+        reject(signal!.reason ?? abortError());
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      channels.forEach((ch, index) => {
+        if (ch.#closed) return;
+        const entry: Waiter<unknown> = {
+          resolve: value => {
+            detachAll();
+            resolve({ index, value });
+          },
+          reject: () => {
+            const i = entries.findIndex(([, e]) => e === entry);
+            if (i >= 0) entries.splice(i, 1);
+            if (entries.length === 0) {
+              signal?.removeEventListener('abort', onAbort);
+              resolve({ index: -1, closed: true });
+            }
+          },
+          detach: () => {},
+        };
+        entries.push([ch, entry]);
+        ch.#receivers.push(entry);
+      });
+      if (entries.length === 0) {
+        signal?.removeEventListener('abort', onAbort);
+        resolve({ index: -1, closed: true });
+      }
+    });
+  }
+
   /** No more sends. Buffered values can still be received; waiting parties are rejected. */
   close(): void {
     if (this.#closed) return;
@@ -196,3 +271,6 @@ export class Channel<T> implements AsyncIterable<T> {
     return entry;
   }
 }
+
+/** Standalone alias of Channel.select. */
+export const select: typeof Channel.select = Channel.select.bind(Channel);

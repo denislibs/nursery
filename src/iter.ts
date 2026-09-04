@@ -1,4 +1,5 @@
 /** Operators over AsyncIterable. Compose with pipe(); consume with for-await or toArray(). */
+import { timeoutError } from './signal.js';
 
 export type Op<T, R> = (source: AsyncIterable<T>) => AsyncIterable<R>;
 
@@ -7,6 +8,11 @@ export function pipe<A, B>(src: AsyncIterable<A>, a: Op<A, B>): AsyncIterable<B>
 export function pipe<A, B, C>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>): AsyncIterable<C>;
 export function pipe<A, B, C, D>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>): AsyncIterable<D>;
 export function pipe<A, B, C, D, E>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>): AsyncIterable<E>;
+export function pipe<A, B, C, D, E, F>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>): AsyncIterable<F>;
+export function pipe<A, B, C, D, E, F, G>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>): AsyncIterable<G>;
+export function pipe<A, B, C, D, E, F, G, H>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>): AsyncIterable<H>;
+export function pipe<A, B, C, D, E, F, G, H, I>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>, h: Op<H, I>): AsyncIterable<I>;
+export function pipe<A, B, C, D, E, F, G, H, I, J>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>, h: Op<H, I>, i: Op<I, J>): AsyncIterable<J>;
 export function pipe(src: AsyncIterable<unknown>, ...ops: Op<unknown, unknown>[]): AsyncIterable<unknown> {
   return ops.reduce((acc, op) => op(acc), src);
 }
@@ -165,6 +171,201 @@ export function throttle<T>(ms: number): Op<T, T> {
         stop();
       };
     });
+}
+
+/** Drops values equal to the previous one. Default comparison is Object.is. */
+export function distinctUntilChanged<T>(equals: (a: T, b: T) => boolean = Object.is): Op<T, T> {
+  return async function* (src) {
+    let first = true;
+    let prev: T | undefined;
+    for await (const v of src) {
+      if (first || !equals(prev as T, v)) yield v;
+      first = false;
+      prev = v;
+    }
+  };
+}
+
+/** Emits the running accumulation after every value. */
+export function scan<T, A>(fn: (acc: A, value: T, index: number) => A | Promise<A>, seed: A): Op<T, A> {
+  return async function* (src) {
+    let acc = seed;
+    let i = 0;
+    for await (const v of src) {
+      acc = await fn(acc, v, i++);
+      yield acc;
+    }
+  };
+}
+
+/** Runs a side effect per value without changing the stream. */
+export function tap<T>(fn: (value: T, index: number) => unknown): Op<T, T> {
+  return async function* (src) {
+    let i = 0;
+    for await (const v of src) {
+      await fn(v, i++);
+      yield v;
+    }
+  };
+}
+
+type ValueOf<S> = S extends AsyncIterable<infer V> ? V : never;
+
+/** Interleaves several sources as they produce. Ends when all end; one failure fails all. */
+export function merge<const S extends readonly AsyncIterable<unknown>[]>(...sources: S): AsyncIterable<ValueOf<S[number]>> {
+  type T = ValueOf<S[number]>;
+  return bridge<T>(sink => {
+    let open = sources.length;
+    if (open === 0) sink.end();
+    const stops = sources.map(src =>
+      consume(src as AsyncIterable<T>, {
+        value: v => sink.emit(v),
+        end: () => {
+          if (--open === 0) sink.end();
+        },
+        error: err => {
+          sink.fail(err);
+          stopAll();
+        },
+      }),
+    );
+    const stopAll = () => {
+      for (const s of stops) s();
+    };
+    return stopAll;
+  });
+}
+
+export interface FlatMapOptions {
+  /** Max inner iterables consumed at once. Default Infinity. */
+  concurrency?: number;
+}
+
+type FlatMapResult<R> = AsyncIterable<R> | Iterable<R> | Promise<R> | R;
+
+const isIterableLike = (v: unknown): v is AsyncIterable<unknown> | Iterable<unknown> =>
+  typeof v === 'object' && v !== null && (Symbol.asyncIterator in v || Symbol.iterator in v);
+
+/**
+ * Maps each value to an inner iterable (or a promise/value) and flattens, consuming at most
+ * `concurrency` inners at once. Order across inners is arrival order.
+ */
+export function flatMap<T, R>(
+  fn: (value: T, index: number) => FlatMapResult<R>,
+  opts: FlatMapOptions = {},
+): Op<T, R> {
+  const concurrency = Math.max(1, opts.concurrency ?? Infinity);
+  return src =>
+    bridge<R>(sink => {
+      const it = src[Symbol.asyncIterator]();
+      let active = 0;
+      let index = 0;
+      let sourceDone = false;
+      let stopped = false;
+      const waiters: Array<() => void> = [];
+      const slotFreed = () => {
+        active--;
+        waiters.shift()?.();
+        if (sourceDone && active === 0) sink.end();
+      };
+      const stop = () => {
+        if (stopped) return;
+        stopped = true;
+        for (const w of waiters.splice(0)) w();
+        Promise.resolve(it.return?.()).catch(() => {});
+      };
+      const runInner = async (value: T, i: number) => {
+        try {
+          const inner = await fn(value, i);
+          if (isIterableLike(inner)) {
+            for await (const v of inner as AsyncIterable<R>) {
+              if (stopped) return;
+              sink.emit(v);
+            }
+          } else {
+            sink.emit(inner);
+          }
+        } catch (err) {
+          sink.fail(err);
+          stop();
+        } finally {
+          slotFreed();
+        }
+      };
+      void (async () => {
+        try {
+          for (;;) {
+            while (!stopped && active >= concurrency) await new Promise<void>(r => waiters.push(r));
+            if (stopped) return;
+            const r = await it.next();
+            if (stopped) return;
+            if (r.done) {
+              sourceDone = true;
+              if (active === 0) sink.end();
+              return;
+            }
+            active++;
+            void runInner(r.value, index++);
+          }
+        } catch (err) {
+          if (!stopped) sink.fail(err);
+        }
+      })();
+      return stop;
+    });
+}
+
+/** Fails with TimeoutError if the source stays silent for `ms` between values. */
+export function timeout<T>(ms: number): Op<T, T> {
+  return src =>
+    bridge<T>(sink => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          sink.fail(timeoutError(`No value for ${ms}ms`));
+          stop();
+        }, ms);
+      };
+      const stop = consume(src, {
+        value: v => {
+          arm();
+          sink.emit(v);
+        },
+        end: () => {
+          clearTimeout(timer);
+          sink.end();
+        },
+        error: err => {
+          clearTimeout(timer);
+          sink.fail(err);
+        },
+      });
+      arm();
+      return () => {
+        clearTimeout(timer);
+        stop();
+      };
+    });
+}
+
+/** Iterates a ReadableStream (Safari lacks the native async iterator). Cancels it on early exit. */
+export async function* fromReadableStream<T>(stream: ReadableStream<T>): AsyncGenerator<T, void, undefined> {
+  const reader = stream.getReader();
+  let done = false;
+  try {
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) {
+        done = true;
+        return;
+      }
+      yield r.value;
+    }
+  } finally {
+    if (!done) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 }
 
 // ---- push-to-pull plumbing -------------------------------------------------------------

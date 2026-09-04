@@ -197,9 +197,16 @@ export interface QueueOptions {
   signal?: MaybeSignal;
 }
 
+export interface QueueAddOptions {
+  /** Higher runs first among waiting tasks. Default 0. Equal priorities stay FIFO. */
+  priority?: number;
+  signal?: MaybeSignal;
+}
+
 interface QueueEntry {
   run: () => Promise<void>;
   reject: (err: unknown) => void;
+  priority: number;
   signal?: MaybeSignal;
   onAbort?: () => void;
 }
@@ -228,13 +235,17 @@ export class Queue {
     return this.#running;
   }
 
-  add<T>(task: Task<T>, signal?: MaybeSignal): Promise<T> {
+  add<T>(task: Task<T>, signalOrOptions?: MaybeSignal | QueueAddOptions): Promise<T> {
+    const opts: QueueAddOptions =
+      signalOrOptions instanceof AbortSignal ? { signal: signalOrOptions } : (signalOrOptions ?? {});
+    const { signal, priority = 0 } = opts;
     if (this.#signal?.aborted) return Promise.reject(this.#signal.reason ?? abortError());
     if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
     return new Promise<T>((resolve, reject) => {
       const entry: QueueEntry = {
         signal,
         reject,
+        priority,
         run: async () => {
           if (entry.onAbort) signal?.removeEventListener('abort', entry.onAbort);
           try {
@@ -252,7 +263,10 @@ export class Queue {
         };
         signal.addEventListener('abort', entry.onAbort, { once: true });
       }
-      this.#waiting.push(entry);
+      // insert after the last entry with priority >= ours: higher first, equal stays FIFO
+      let at = this.#waiting.length;
+      while (at > 0 && this.#waiting[at - 1]!.priority < priority) at--;
+      this.#waiting.splice(at, 0, entry);
       this.#pump();
     });
   }

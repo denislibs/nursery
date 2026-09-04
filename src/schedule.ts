@@ -1,7 +1,12 @@
 import { abortError, throwIfAborted, type MaybeSignal } from './signal.js';
 
+export type TaskPriority = 'user-blocking' | 'user-visible' | 'background';
+
 type G = typeof globalThis & {
-  scheduler?: { yield?: () => Promise<void> };
+  scheduler?: {
+    yield?: () => Promise<void>;
+    postTask?: <T>(fn: () => T | Promise<T>, opts?: { priority?: TaskPriority; signal?: AbortSignal; delay?: number }) => Promise<T>;
+  };
   requestIdleCallback?: (cb: (d: IdleDeadline) => void, opts?: { timeout?: number }) => number;
   cancelIdleCallback?: (id: number) => void;
   requestAnimationFrame?: (cb: (t: number) => void) => number;
@@ -41,6 +46,57 @@ export async function yieldToMain(signal?: MaybeSignal): Promise<void> {
   if (g.scheduler?.yield) await g.scheduler.yield();
   else await macrotask();
   throwIfAborted(signal);
+}
+
+export interface PostTaskOptions {
+  /** Default 'user-visible', like the platform. */
+  priority?: TaskPriority;
+  signal?: MaybeSignal;
+  /** Minimum delay in ms before the task may run. */
+  delay?: number;
+}
+
+const PRIORITY_ORDER: TaskPriority[] = ['user-blocking', 'user-visible', 'background'];
+const fallbackQueues: Record<TaskPriority, Array<() => void>> = { 'user-blocking': [], 'user-visible': [], background: [] };
+let fallbackScheduled = false;
+
+function drainFallback(): void {
+  fallbackScheduled = false;
+  for (const p of PRIORITY_ORDER) {
+    const jobs = fallbackQueues[p].splice(0);
+    for (const job of jobs) job();
+  }
+}
+
+/**
+ * Runs `fn` as a scheduled task with a priority. Uses scheduler.postTask where available;
+ * otherwise a macrotask queue that still honours priority order among queued tasks.
+ */
+export function postTask<T>(fn: () => T | Promise<T>, opts: PostTaskOptions = {}): Promise<T> {
+  const { priority = 'user-visible', signal, delay } = opts;
+  if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
+  if (g.scheduler?.postTask) {
+    return g.scheduler.postTask(fn, { priority, signal: signal ?? undefined, delay });
+  }
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      if (signal?.aborted) return reject(signal.reason ?? abortError());
+      try {
+        resolve(fn());
+      } catch (err) {
+        reject(err);
+      }
+    };
+    const enqueue = () => {
+      fallbackQueues[priority].push(run);
+      if (!fallbackScheduled) {
+        fallbackScheduled = true;
+        void macrotask().then(drainFallback);
+      }
+    };
+    if (delay) setTimeout(enqueue, delay);
+    else enqueue();
+  });
 }
 
 function cancellable<T>(

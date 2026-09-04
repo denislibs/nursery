@@ -39,10 +39,16 @@ describe('Scope', () => {
   });
 
   test('unawaited failing spawn does not produce an unhandled rejection', async () => {
-    const scope = new Scope();
-    scope.spawn(async () => { throw new Error('ignored by caller'); });
-    await scope.settled();
-    expect((scope.error as Error).message).toBe('ignored by caller');
+    const off = Scope.onUnhandled(() => {});   // reported through the hook, not the platform
+    try {
+      const scope = new Scope();
+      scope.spawn(async () => { throw new Error('ignored by caller'); });
+      await scope.settled();
+      expect((scope.error as Error).message).toBe('ignored by caller');
+      await new Promise(r => setTimeout(r, 0));
+    } finally {
+      off();
+    }
   });
 
   test('await using aborts pending children and waits for them to settle', async () => {

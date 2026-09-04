@@ -2,17 +2,42 @@ import { abortError, type MaybeSignal } from './signal.js';
 
 /** Anything with postMessage + message events: Worker, MessagePort, DedicatedWorkerGlobalScope. */
 export interface Endpoint {
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   addEventListener(type: 'message', listener: (ev: MessageEvent) => void): void;
   removeEventListener(type: 'message', listener: (ev: MessageEvent) => void): void;
   start?(): void;
 }
 
-type AnyFn = (...args: never[]) => unknown;
+// oxlint-disable-next-line typescript/no-explicit-any
+type AnyFn = (...args: any[]) => any;
 
 export type Remote<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
 } & Disposable;
+
+const transferLists = new WeakMap<object, Transferable[]>();
+const CALLBACK = Symbol('scopekit.callback');
+interface CallbackMarker {
+  [CALLBACK]: AnyFn;
+}
+
+/**
+ * Marks `value` (an argument or a return value) so the listed buffers are moved instead of copied.
+ *   remote.process(transfer(buf, [buf]))
+ *   return transfer({ pixels }, [pixels.buffer])
+ */
+export function transfer<T extends object>(value: T, transferables: Transferable[]): T {
+  transferLists.set(value, transferables);
+  return value;
+}
+
+/**
+ * Wraps a function so it can be passed to the other side. Calls made there are forwarded back
+ * and resolve with the return value. Valid for the duration of the remote call that carried it.
+ */
+export function callback<F extends AnyFn>(fn: F): F {
+  return { [CALLBACK]: fn } as unknown as F;
+}
 
 interface SerializedError {
   __sk: 'error';
@@ -24,12 +49,20 @@ interface SignalMarker {
   __sk: 'signal';
   index: number;
 }
+interface CallbackRef {
+  __sk: 'callback';
+  cbId: number;
+}
 
 type CallMsg = { t: 'call'; id: number; method: string; args: unknown[]; signals: number };
 type AbortMsg = { t: 'abort'; id: number; index: number; reason: unknown };
 type OkMsg = { t: 'ok'; id: number; value: unknown };
 type ErrMsg = { t: 'err'; id: number; error: SerializedError };
-type Msg = CallMsg | AbortMsg | OkMsg | ErrMsg;
+/** Worker → caller: invoke callback cbId that travelled with call id. */
+type CbMsg = { t: 'cb'; id: number; cbId: number; callId: number; args: unknown[] };
+/** Caller → worker: result of a callback invocation. */
+type CbResultMsg = { t: 'cbr'; id: number; callId: number; value?: unknown; error?: SerializedError };
+type Msg = CallMsg | AbortMsg | OkMsg | ErrMsg | CbMsg | CbResultMsg;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
@@ -49,38 +82,65 @@ function deserializeError(e: SerializedError): Error {
 
 const isSerializedError = (v: unknown): v is SerializedError => isPlainObject(v) && v['__sk'] === 'error';
 const isSignalMarker = (v: unknown): v is SignalMarker => isPlainObject(v) && v['__sk'] === 'signal';
+const isCallbackRef = (v: unknown): v is CallbackRef => isPlainObject(v) && v['__sk'] === 'callback';
+const isCallbackMarker = (v: unknown): v is CallbackMarker => typeof v === 'object' && v !== null && CALLBACK in v;
 
-/** Replaces AbortSignals (top-level args and top-level fields of plain-object args) with markers. */
-function extractSignals(args: unknown[]): { args: unknown[]; signals: AbortSignal[] } {
+interface Encoded {
+  args: unknown[];
+  signals: AbortSignal[];
+  callbacks: AnyFn[];
+  transferables: Transferable[];
+}
+
+/** Replaces AbortSignals and callbacks (top-level args and top-level fields of plain-object args) with markers. */
+function encodeArgs(rawArgs: unknown[]): Encoded {
   const signals: AbortSignal[] = [];
-  const mark = (s: AbortSignal): SignalMarker => ({ __sk: 'signal', index: signals.push(s) - 1 });
-  const out = args.map(arg => {
-    if (arg instanceof AbortSignal) return mark(arg);
+  const callbacks: AnyFn[] = [];
+  const transferables: Transferable[] = [];
+  const encodeValue = (v: unknown): unknown => {
+    if (v instanceof AbortSignal) return { __sk: 'signal', index: signals.push(v) - 1 } satisfies SignalMarker;
+    if (isCallbackMarker(v)) return { __sk: 'callback', cbId: callbacks.push(v[CALLBACK]) - 1 } satisfies CallbackRef;
+    return v;
+  };
+  const args = rawArgs.map(arg => {
+    if (typeof arg === 'object' && arg !== null) {
+      const list = transferLists.get(arg);
+      if (list) transferables.push(...list);
+    }
+    const direct = encodeValue(arg);
+    if (direct !== arg) return direct;
     if (isPlainObject(arg)) {
       let copy: Record<string, unknown> | undefined;
       for (const [k, v] of Object.entries(arg)) {
-        if (v instanceof AbortSignal) {
+        const enc = encodeValue(v);
+        if (enc !== v) {
           copy ??= { ...arg };
-          copy[k] = mark(v);
+          copy[k] = enc;
         }
       }
       return copy ?? arg;
     }
     return arg;
   });
-  return { args: out, signals };
+  return { args, signals, callbacks, transferables };
 }
 
-function injectSignals(args: unknown[], signals: AbortSignal[]): unknown[] {
-  const resolve = (v: unknown) => (isSignalMarker(v) ? signals[v.index] : v);
+function decodeArgs(args: unknown[], signals: AbortSignal[], makeCallback: (cbId: number) => AnyFn): unknown[] {
+  const decodeValue = (v: unknown): unknown => {
+    if (isSignalMarker(v)) return signals[v.index];
+    if (isCallbackRef(v)) return makeCallback(v.cbId);
+    return v;
+  };
   return args.map(arg => {
-    if (isSignalMarker(arg)) return resolve(arg);
+    const direct = decodeValue(arg);
+    if (direct !== arg) return direct;
     if (isPlainObject(arg)) {
       let copy: Record<string, unknown> | undefined;
       for (const [k, v] of Object.entries(arg)) {
-        if (isSignalMarker(v)) {
+        const dec = decodeValue(v);
+        if (dec !== v) {
           copy ??= { ...arg };
-          copy[k] = resolve(v);
+          copy[k] = dec;
         }
       }
       return copy ?? arg;
@@ -99,15 +159,22 @@ function cloneableReason(reason: unknown): unknown {
   }
 }
 
+function transferOf(value: unknown): Transferable[] | undefined {
+  return typeof value === 'object' && value !== null ? transferLists.get(value) : undefined;
+}
+
 /**
  * Worker side. Exposes `api` on the endpoint (defaults to the worker global scope).
- * Every AbortSignal the caller passes arrives as a live AbortSignal here.
+ * AbortSignals arrive live; callback() arguments arrive as async functions; transfer() is honoured
+ * for return values.
  */
 export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalThis): () => void {
   const running = new Map<number, AbortController[]>();
-  const post = (msg: OkMsg | ErrMsg) => {
+  const cbPending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+  let cbCallCounter = 0;
+  const post = (msg: OkMsg | ErrMsg, transferables?: Transferable[]) => {
     try {
-      endpoint.postMessage(msg);
+      endpoint.postMessage(msg, transferables);
     } catch (err) {
       endpoint.postMessage({ t: 'err', id: msg.id, error: serializeError(err) } satisfies ErrMsg);
     }
@@ -120,15 +187,29 @@ export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalTh
       ctrl?.abort(isSerializedError(msg.reason) ? deserializeError(msg.reason) : (msg.reason ?? abortError()));
       return;
     }
+    if (msg.t === 'cbr') {
+      const p = cbPending.get(msg.callId);
+      if (!p) return;
+      cbPending.delete(msg.callId);
+      if (msg.error) p.reject(deserializeError(msg.error));
+      else p.resolve(msg.value);
+      return;
+    }
     if (msg.t !== 'call') return;
     const controllers = Array.from({ length: msg.signals }, () => new AbortController());
     running.set(msg.id, controllers);
+    const makeCallback = (cbId: number): AnyFn => (...args: unknown[]) =>
+      new Promise((resolve, reject) => {
+        const callId = ++cbCallCounter;
+        cbPending.set(callId, { resolve, reject });
+        endpoint.postMessage({ t: 'cb', id: msg.id, cbId, callId, args } satisfies CbMsg);
+      });
     try {
       const fn = api[msg.method];
       if (typeof fn !== 'function') throw new TypeError(`Unknown remote method: ${msg.method}`);
-      const args = injectSignals(msg.args, controllers.map(c => c.signal));
-      const value = await (fn as (...a: unknown[]) => unknown)(...args);
-      post({ t: 'ok', id: msg.id, value });
+      const args = decodeArgs(msg.args, controllers.map(c => c.signal), makeCallback);
+      const value: unknown = await fn(...args);
+      post({ t: 'ok', id: msg.id, value }, transferOf(value));
     } catch (err) {
       post({ t: 'err', id: msg.id, error: serializeError(err) });
     } finally {
@@ -147,11 +228,13 @@ interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: unknown) => void;
   cleanup: () => void;
+  callbacks: AnyFn[];
 }
 
 /**
- * Main-thread side. Every method of T becomes an async function; AbortSignals in the arguments
- * (positional, or as a field of an options object) are forwarded and abort the remote task.
+ * Main-thread side. Every method of T becomes an async function. AbortSignals in the arguments
+ * (positional, or as a field of an options object) are forwarded and abort the remote task;
+ * callback() arguments are invoked back here; transfer() moves buffers instead of copying.
  */
 export function wrap<T>(endpoint: Endpoint): Remote<T> {
   const pending = new Map<number, Pending>();
@@ -160,7 +243,20 @@ export function wrap<T>(endpoint: Endpoint): Remote<T> {
 
   const onMessage = (ev: MessageEvent) => {
     const msg = ev.data as Msg;
-    if (!msg || typeof msg !== 'object' || (msg.t !== 'ok' && msg.t !== 'err')) return;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.t === 'cb') {
+      const p = pending.get(msg.id);
+      const fn = p?.callbacks[msg.cbId];
+      if (!fn) return;
+      Promise.resolve()
+        .then(() => fn(...msg.args) as unknown)
+        .then(
+          value => endpoint.postMessage({ t: 'cbr', id: msg.id, callId: msg.callId, value } satisfies CbResultMsg),
+          err => endpoint.postMessage({ t: 'cbr', id: msg.id, callId: msg.callId, error: serializeError(err) } satisfies CbResultMsg),
+        );
+      return;
+    }
+    if (msg.t !== 'ok' && msg.t !== 'err') return;
     const p = pending.get(msg.id);
     if (!p) return;
     pending.delete(msg.id);
@@ -173,7 +269,7 @@ export function wrap<T>(endpoint: Endpoint): Remote<T> {
 
   const call = (method: string, rawArgs: unknown[]): Promise<unknown> => {
     if (disposed) return Promise.reject(new Error('Remote proxy is disposed'));
-    const { args, signals } = extractSignals(rawArgs);
+    const { args, signals, callbacks, transferables } = encodeArgs(rawArgs);
     for (const s of signals) if (s.aborted) return Promise.reject(s.reason ?? abortError());
     const id = nextId++;
     return new Promise((resolve, reject) => {
@@ -192,9 +288,9 @@ export function wrap<T>(endpoint: Endpoint): Remote<T> {
       const cleanup = () => {
         for (const [s, l] of listeners) s?.removeEventListener('abort', l);
       };
-      pending.set(id, { resolve, reject, cleanup });
+      pending.set(id, { resolve, reject, cleanup, callbacks });
       try {
-        endpoint.postMessage({ t: 'call', id, method, args, signals: signals.length } satisfies CallMsg);
+        endpoint.postMessage({ t: 'call', id, method, args, signals: signals.length } satisfies CallMsg, transferables);
       } catch (err) {
         pending.delete(id);
         cleanup();
