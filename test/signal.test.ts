@@ -93,3 +93,49 @@ describe('abortError', () => {
     expect(e.message).toBe('cancelled by user');
   });
 });
+
+import { linkSignals, manualAnySignal } from '../src/signal.js';
+
+describe('manualAnySignal (fallback for browsers without AbortSignal.any)', () => {
+  test('aborts with the reason of the first input to abort', () => {
+    const a = new AbortController();
+    const b = new AbortController();
+    const { signal } = manualAnySignal([a.signal, b.signal]);
+    b.abort('b-reason');
+    a.abort('a-reason');
+    expect(signal.aborted).toBe(true);
+    expect(signal.reason).toBe('b-reason');
+  });
+  test('is aborted immediately when an input is already aborted', () => {
+    const a = new AbortController();
+    a.abort('early');
+    const { signal } = manualAnySignal([a.signal]);
+    expect(signal.reason).toBe('early');
+  });
+  test('unlink removes listeners so later aborts do not propagate', () => {
+    const a = new AbortController();
+    const { signal, unlink } = manualAnySignal([a.signal]);
+    unlink();
+    a.abort();
+    expect(signal.aborted).toBe(false);
+  });
+  test('listeners are removed from every input once one aborts', () => {
+    const a = new AbortController();
+    const b = new AbortController();
+    const spy = vi.spyOn(b.signal, 'removeEventListener');
+    manualAnySignal([a.signal, b.signal]);
+    a.abort();
+    expect(spy).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+});
+
+describe('linkSignals', () => {
+  test('returns a combined signal and an unlink function', () => {
+    const a = new AbortController();
+    const link = linkSignals([a.signal, undefined]);
+    expect(link.signal.aborted).toBe(false);
+    expect(typeof link.unlink).toBe('function');
+    a.abort('x');
+    expect(link.signal.reason).toBe('x');
+  });
+});

@@ -22,28 +22,52 @@ export function throwIfAborted(signal: MaybeSignal): void {
   if (signal?.aborted) throw signal.reason ?? abortError();
 }
 
-/**
- * A signal that aborts as soon as any of the inputs aborts, carrying its reason.
- * Uses AbortSignal.any when available, otherwise a manual fallback.
- */
-export function anySignal(signals: readonly MaybeSignal[]): AbortSignal {
-  const list = signals.filter((s): s is AbortSignal => s !== undefined);
-  const anyFn = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
-  if (anyFn) return anyFn.call(AbortSignal, list);
+export interface SignalLink {
+  signal: AbortSignal;
+  /** Detach from the inputs. No-op for the native implementation, which is GC-safe. */
+  unlink: () => void;
+}
 
+/**
+ * Manual fallback for AbortSignal.any. Unlike the native version, it holds strong listeners
+ * on the inputs, so call `unlink()` when the derived signal is no longer needed.
+ */
+export function manualAnySignal(signals: readonly MaybeSignal[]): SignalLink {
+  const list = signals.filter((s): s is AbortSignal => s !== undefined);
   const ctrl = new AbortController();
+  const detach = () => {
+    for (const s of list) s.removeEventListener('abort', onAbort);
+  };
+  const onAbort = function (this: AbortSignal) {
+    ctrl.abort(this.reason);
+    detach();
+  };
   for (const s of list) {
     if (s.aborted) {
       ctrl.abort(s.reason);
-      return ctrl.signal;
+      return { signal: ctrl.signal, unlink: () => {} };
     }
   }
-  const onAbort = function (this: AbortSignal) {
-    ctrl.abort(this.reason);
-    for (const s of list) s.removeEventListener('abort', onAbort);
-  };
-  for (const s of list) s.addEventListener('abort', onAbort, { once: true });
-  return ctrl.signal;
+  for (const s of list) s.addEventListener('abort', onAbort);
+  return { signal: ctrl.signal, unlink: detach };
+}
+
+/**
+ * A signal that aborts as soon as any input aborts, carrying its reason, plus `unlink()`
+ * for callers that own a long-lived parent signal and want to drop the link explicitly.
+ */
+export function linkSignals(signals: readonly MaybeSignal[]): SignalLink {
+  const nativeAny = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  if (nativeAny) {
+    const list = signals.filter((s): s is AbortSignal => s !== undefined);
+    return { signal: nativeAny.call(AbortSignal, list), unlink: () => {} };
+  }
+  return manualAnySignal(signals);
+}
+
+/** Shorthand for linkSignals(...).signal when the link lifetime does not matter. */
+export function anySignal(signals: readonly MaybeSignal[]): AbortSignal {
+  return linkSignals(signals).signal;
 }
 
 /** A signal that aborts with TimeoutError after `ms`. */

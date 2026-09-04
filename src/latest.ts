@@ -4,6 +4,8 @@ export interface LatestFn<A, R> {
   (arg: A, signal?: MaybeSignal): Promise<R>;
   /** Abort the in-flight call, if any. */
   cancel(): void;
+  /** True while a call is in flight. */
+  readonly pending: boolean;
 }
 
 /**
@@ -25,6 +27,7 @@ export function latest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>): L
     current?.abort(abortError('Cancelled'));
     current = undefined;
   };
+  Object.defineProperty(wrapped, 'pending', { get: () => current !== undefined });
   return wrapped;
 }
 

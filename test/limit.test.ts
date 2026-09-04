@@ -49,6 +49,15 @@ describe('Semaphore', () => {
   });
 });
 
+describe('Semaphore.run', () => {
+  test('passes the signal into fn', async () => {
+    const sem = new Semaphore(1);
+    const c = new AbortController();
+    const got = await sem.run(async sig => sig, c.signal);
+    expect(got).toBe(c.signal);
+  });
+});
+
 describe('Mutex', () => {
   test('serializes critical sections', async () => {
     const m = new Mutex();
@@ -99,5 +108,116 @@ describe('map', () => {
     const p = map([1, 2, 3], async (_n, _i, sig) => sleep(1000, sig), { concurrency: 1, signal: c.signal });
     c.abort();
     await expect(p).rejects.toSatisfy(isAbort);
+  });
+});
+
+import { mapSettled, Queue } from '../src/limit.js';
+
+describe('map over iterables', () => {
+  test('accepts a sync generator and keeps order', async () => {
+    function* gen() { yield 3; yield 1; yield 2; }
+    const out = await map(gen(), async (n, _i, sig) => { await sleep(n, sig); return n * 10; }, { concurrency: 3 });
+    expect(out).toEqual([30, 10, 20]);
+  });
+  test('accepts an async iterable and keeps order', async () => {
+    async function* gen() { yield 'a'; await tick(); yield 'b'; yield 'c'; }
+    const out = await map(gen(), async s => s.toUpperCase(), { concurrency: 2 });
+    expect(out).toEqual(['A', 'B', 'C']);
+  });
+  test('stops pulling from the source after a failure', async () => {
+    let pulled = 0;
+    function* gen() { for (let i = 0; i < 100; i++) { pulled++; yield i; } }
+    await expect(map(gen(), async n => { if (n === 1) throw new Error('boom'); await tick(); }, { concurrency: 1 }))
+      .rejects.toThrow('boom');
+    expect(pulled).toBeLessThan(5);
+  });
+});
+
+describe('mapSettled', () => {
+  test('runs everything, keeps order, reports each outcome', async () => {
+    const r = await mapSettled([1, 2, 3], async n => { if (n === 2) throw new Error('two'); return n; }, { concurrency: 2 });
+    expect(r.map(x => x.status)).toEqual(['fulfilled', 'rejected', 'fulfilled']);
+    expect((r[1] as PromiseRejectedResult).reason.message).toBe('two');
+    expect((r[2] as PromiseFulfilledResult<number>).value).toBe(3);
+  });
+  test('does not abort siblings on failure', async () => {
+    let siblingAborted = false;
+    await mapSettled([1, 2], async (n, _i, sig) => {
+      if (n === 1) throw new Error('x');
+      await sleep(5, sig).catch(e => { siblingAborted = isAbort(e); throw e; });
+    }, { concurrency: 2 });
+    expect(siblingAborted).toBe(false);
+  });
+  test('rejects when the outer signal aborts', async () => {
+    const c = new AbortController();
+    const p = mapSettled([1, 2], async (_n, _i, sig) => sleep(1000, sig), { signal: c.signal });
+    c.abort();
+    await expect(p).rejects.toSatisfy(isAbort);
+  });
+});
+
+describe('Queue', () => {
+  test('add() returns the task result', async () => {
+    const q = new Queue({ concurrency: 2 });
+    await expect(q.add(async () => 42)).resolves.toBe(42);
+  });
+  test('never runs more than concurrency tasks at once', async () => {
+    const q = new Queue({ concurrency: 2 });
+    let active = 0, peak = 0;
+    const tasks = [1, 2, 3, 4, 5].map(() => q.add(async () => {
+      active++; peak = Math.max(peak, active);
+      await tick();
+      active--;
+    }));
+    await Promise.all(tasks);
+    expect(peak).toBe(2);
+  });
+  test('size and pending report waiting and running tasks', async () => {
+    const q = new Queue({ concurrency: 1 });
+    q.add(() => tick());
+    q.add(() => tick());
+    q.add(() => tick());
+    expect(q.pending).toBe(1);
+    expect(q.size).toBe(2);
+    await q.idle();
+    expect(q.pending).toBe(0);
+    expect(q.size).toBe(0);
+  });
+  test('idle() resolves immediately on an empty queue', async () => {
+    await expect(new Queue().idle()).resolves.toBeUndefined();
+  });
+  test('a failed task rejects its own promise only', async () => {
+    const q = new Queue({ concurrency: 1 });
+    const bad = q.add(async () => { throw new Error('bad'); });
+    const good = q.add(async () => 'good');
+    await expect(bad).rejects.toThrow('bad');
+    await expect(good).resolves.toBe('good');
+  });
+  test('clear() rejects waiting tasks and leaves running ones alone', async () => {
+    const q = new Queue({ concurrency: 1 });
+    const running = q.add(async () => { await tick(); return 'ran'; });
+    const waiting = q.add(async () => 'never');
+    q.clear();
+    await expect(waiting).rejects.toSatisfy(isAbort);
+    await expect(running).resolves.toBe('ran');
+  });
+  test('queue signal aborts running tasks and rejects waiting ones', async () => {
+    const c = new AbortController();
+    const q = new Queue({ concurrency: 1, signal: c.signal });
+    const running = q.add(sig => sleep(1000, sig));
+    const waiting = q.add(async () => 'never');
+    c.abort();
+    await expect(running).rejects.toSatisfy(isAbort);
+    await expect(waiting).rejects.toSatisfy(isAbort);
+    await expect(q.add(async () => 1)).rejects.toSatisfy(isAbort);
+  });
+  test('per-task signal removes a waiting task', async () => {
+    const q = new Queue({ concurrency: 1 });
+    q.add(() => tick());
+    const c = new AbortController();
+    const waiting = q.add(async () => 'x', c.signal);
+    c.abort();
+    await expect(waiting).rejects.toSatisfy(isAbort);
+    expect(q.size).toBe(0);
   });
 });

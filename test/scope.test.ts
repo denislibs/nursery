@@ -1,4 +1,8 @@
-import { Scope, ScopeClosedError } from '../src/scope.js';
+import { Scope, ScopeClosedError, contextKey } from '../src/scope.js';
+
+const TraceId = contextKey<string>('traceId');
+const User = contextKey<string>('user');
+const Region = contextKey('region', 'eu');
 import { isAbort, sleep } from '../src/signal.js';
 
 const tick = () => new Promise<void>(r => setTimeout(r, 0));
@@ -84,10 +88,11 @@ describe('Scope', () => {
   });
 
   test('child scope inherits ctx and cancellation from parent, but not the other way round', async () => {
-    const parent = new Scope({ ctx: { traceId: 't1', user: 'u' } });
-    const child = parent.child({ ctx: { user: 'override' } });
-    expect(child.ctx).toEqual({ traceId: 't1', user: 'override' });
-    expect(parent.ctx).toEqual({ traceId: 't1', user: 'u' });
+    const parent = new Scope({ ctx: [TraceId.with('t1'), User.with('u')] });
+    const child = parent.child({ ctx: [User.with('override')] });
+    expect(child.get(TraceId)).toBe('t1');
+    expect(child.get(User)).toBe('override');
+    expect(parent.get(User)).toBe('u');
 
     child.abort();
     expect(parent.signal.aborted).toBe(false);
@@ -95,6 +100,40 @@ describe('Scope', () => {
     const child2 = parent.child();
     parent.abort();
     expect(child2.signal.aborted).toBe(true);
+  });
+
+  test('get() falls back to the key default and has() reports explicit bindings only', () => {
+    const scope = new Scope();
+    expect(scope.get(Region)).toBe('eu');
+    expect(scope.has(Region)).toBe(false);
+    expect(scope.get(TraceId)).toBeUndefined();
+    const child = scope.child({ ctx: [Region.with('us')] });
+    expect(child.get(Region)).toBe('us');
+    expect(child.has(Region)).toBe(true);
+  });
+
+  test('spawned task receives the scope as second argument', async () => {
+    const scope = new Scope({ ctx: [TraceId.with('t9')] });
+    const result = await scope.spawn(async (_sig, s) => {
+      const inner = await s.spawn(async (_s2, s2) => s2.get(TraceId));
+      return `${s.get(TraceId)}/${inner}`;
+    });
+    expect(result).toBe('t9/t9');
+  });
+
+  test('close() unlinks from the parent signal when the manual fallback is used', async () => {
+    const native = (AbortSignal as any).any;
+    (AbortSignal as any).any = undefined;
+    try {
+      const parent = new Scope();
+      const spy = vi.spyOn(parent.signal, 'removeEventListener');
+      const child = parent.child();
+      expect(spy).not.toHaveBeenCalled();
+      await child.close();
+      expect(spy).toHaveBeenCalledWith('abort', expect.any(Function));
+    } finally {
+      (AbortSignal as any).any = native;
+    }
   });
 
   test('parent close waits for child scopes', async () => {

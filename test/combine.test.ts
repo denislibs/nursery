@@ -89,6 +89,37 @@ describe('retry', () => {
   });
 });
 
+describe('retry attemptTimeout', () => {
+  test('a hung attempt is timed out and retried', async () => {
+    let attempts = 0;
+    const r = retry(async sig => {
+      attempts++;
+      if (attempts === 1) await sleep(10_000, sig);
+      return 'ok';
+    }, { retries: 1, delay: 0, attemptTimeout: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.runAllTimersAsync();
+    await expect(r).resolves.toBe('ok');
+    expect(attempts).toBe(2);
+  });
+  test('outer abort is still not retried even with attemptTimeout', async () => {
+    let attempts = 0;
+    const c = new AbortController();
+    const r = retry(async sig => { attempts++; await sleep(10_000, sig); },
+      { retries: 3, delay: 0, attemptTimeout: 1000, signal: c.signal });
+    r.catch(() => {});
+    c.abort();
+    await expect(r).rejects.toSatisfy(isAbort);
+    expect(attempts).toBe(1);
+  });
+  test('rejects with TimeoutError when every attempt times out', async () => {
+    const r = retry(sig => sleep(10_000, sig), { retries: 1, delay: 0, attemptTimeout: 50 });
+    r.catch(() => {});
+    await vi.runAllTimersAsync();
+    await expect(r).rejects.toSatisfy((e: unknown) => (e as DOMException).name === 'TimeoutError');
+  });
+});
+
 describe('race', () => {
   test('returns first settled value and aborts the losers', async () => {
     const seen: string[] = [];

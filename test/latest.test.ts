@@ -28,6 +28,15 @@ describe('latest', () => {
     await vi.advanceTimersByTimeAsync(10);
     await expect(b).resolves.toBe(2);
   });
+  test('pending reflects whether a call is in flight', async () => {
+    const fn = latest(async (_: void, signal: AbortSignal) => sleep(10, signal));
+    expect(fn.pending).toBe(false);
+    const p = fn();
+    expect(fn.pending).toBe(true);
+    await vi.advanceTimersByTimeAsync(10);
+    await p;
+    expect(fn.pending).toBe(false);
+  });
   test('cancel() aborts the current call', async () => {
     const fn = latest(async (_: void, signal: AbortSignal) => sleep(100, signal));
     const p = fn();

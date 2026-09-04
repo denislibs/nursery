@@ -1,16 +1,35 @@
-import { anySignal, abortError, isAbort, timeoutError, type MaybeSignal } from './signal.js';
-import type { Task } from './combine.js';
+import { linkSignals, abortError, isAbort, timeoutError, type MaybeSignal } from './signal.js';
 
-export type Ctx = Readonly<Record<string, unknown>>;
+/** Typed context key. Create with contextKey(); bind a value with key.with(value). */
+export class ContextKey<T> {
+  constructor(readonly name: string, readonly defaultValue?: T) {}
+  with(value: T): ContextBinding<T> {
+    return { key: this, value };
+  }
+}
+
+export interface ContextBinding<T> {
+  key: ContextKey<T>;
+  value: T;
+}
+
+export function contextKey<T>(name: string): ContextKey<T | undefined>;
+export function contextKey<T>(name: string, defaultValue: T): ContextKey<T>;
+export function contextKey<T>(name: string, defaultValue?: T): ContextKey<T | undefined> {
+  return new ContextKey<T | undefined>(name, defaultValue);
+}
 
 export interface ScopeOptions {
   /** External signal the scope is linked to. */
   signal?: MaybeSignal;
   /** Abort the scope with TimeoutError after this many ms. */
   timeout?: number;
-  /** Context values, merged over the parent's. Stand-in for AsyncContext. */
-  ctx?: Record<string, unknown>;
+  /** Context bindings, layered over the parent's. Stand-in for AsyncContext. */
+  ctx?: readonly ContextBinding<unknown>[];
 }
+
+/** A cancellable unit of work owned by a scope. */
+export type ScopedTask<T> = (signal: AbortSignal, scope: Scope) => Promise<T>;
 
 export class ScopeClosedError extends Error {
   constructor() {
@@ -27,9 +46,11 @@ export class ScopeClosedError extends Error {
  */
 export class Scope implements AsyncDisposable {
   readonly signal: AbortSignal;
-  readonly ctx: Ctx;
 
+  #parent: Scope | undefined;
+  #bindings = new Map<ContextKey<unknown>, unknown>();
   #ctrl = new AbortController();
+  #unlink: () => void;
   #children = new Set<Promise<unknown>>();
   #cleanups: Array<() => unknown> = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
@@ -37,8 +58,11 @@ export class Scope implements AsyncDisposable {
   #closed = false;
 
   constructor(opts: ScopeOptions = {}, parent?: Scope) {
-    this.ctx = Object.freeze({ ...(parent?.ctx ?? {}), ...(opts.ctx ?? {}) });
-    this.signal = anySignal([this.#ctrl.signal, opts.signal, parent?.signal]);
+    this.#parent = parent;
+    for (const b of opts.ctx ?? []) this.#bindings.set(b.key, b.value);
+    const link = linkSignals([this.#ctrl.signal, opts.signal, parent?.signal]);
+    this.signal = link.signal;
+    this.#unlink = link.unlink;
     if (opts.timeout !== undefined) {
       this.#timer = setTimeout(
         () => this.abort(timeoutError(`Scope timed out after ${opts.timeout}ms`)),
@@ -71,10 +95,26 @@ export class Scope implements AsyncDisposable {
     return this.#closed;
   }
 
+  /** Reads a context value: own bindings first, then ancestors, then the key default. */
+  get<T>(key: ContextKey<T>): T {
+    for (let s: Scope | undefined = this; s; s = s.#parent) {
+      if (s.#bindings.has(key)) return s.#bindings.get(key) as T;
+    }
+    return key.defaultValue as T;
+  }
+
+  /** True if the key is bound explicitly in this scope or an ancestor. */
+  has(key: ContextKey<unknown>): boolean {
+    for (let s: Scope | undefined = this; s; s = s.#parent) {
+      if (s.#bindings.has(key)) return true;
+    }
+    return false;
+  }
+
   /** Runs `task` with this scope's signal. Failure aborts the siblings. */
-  spawn<T>(task: Task<T>): Promise<T> {
+  spawn<T>(task: ScopedTask<T>): Promise<T> {
     if (this.#closed) return Promise.reject(new ScopeClosedError());
-    const p = (async () => task(this.signal))();
+    const p = (async () => task(this.signal, this))();
     // Attach a handler so an un-awaited failure never becomes an unhandled rejection;
     // callers who await `p` still get the rejection.
     p.catch(err => {
@@ -123,6 +163,7 @@ export class Scope implements AsyncDisposable {
     while (this.#cleanups.length > 0) {
       await this.#cleanups.pop()!();
     }
+    this.#unlink();
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
