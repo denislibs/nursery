@@ -17,7 +17,11 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/compiler": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
@@ -91,6 +95,18 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
+    },
+    "./solid": {
+      "types": "./dist/solid.d.ts",
+      "import": "./dist/solid.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    },
+    "./angular": {
+      "types": "./dist/angular.d.ts",
+      "import": "./dist/angular.js"
     }
   },
   "files": [
@@ -111,13 +127,25 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "vue": ">=3.3"
+    "vue": ">=3.3",
+    "solid-js": ">=1.7",
+    "svelte": ">=5",
+    "@angular/core": ">=17"
   },
   "peerDependenciesMeta": {
     "react": {
       "optional": true
     },
     "vue": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "@angular/core": {
       "optional": true
     }
   }

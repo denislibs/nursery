@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useReducer,
   useRef,
   useState,
   type DependencyList,
@@ -27,25 +28,31 @@ const make = (parent: Scope | null, opts?: ScopeOptions) => (parent ? parent.chi
 
 /**
  * A scope that lives as long as the component is mounted. Child of the nearest ScopeProvider.
- * Under StrictMode the first scope is closed and replaced on the simulated remount.
+ * The scope is created during render as a detached child and adopted by the parent in the
+ * effect, so a render that React discards (StrictMode, Suspense) never pollutes
+ * `parent.children`. Under StrictMode the first scope is closed and replaced on the remount.
  */
 export function useScope(opts?: ScopeOptions): Scope {
   const parent = useContext(ScopeContext);
   const optsRef = useRef(opts);
   optsRef.current = opts;
-  const [scope, setScope] = useState(() => make(parent, opts));
+  const create = () => (parent ? parent.child(optsRef.current, { detached: true }) : new Scope(optsRef.current));
+  const ref = useRef<Scope | null>(null);
+  ref.current ??= create();
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
-    let current = scope;
-    if (current.closed) {
-      current = make(parent, optsRef.current);
-      setScope(current);
+    if (ref.current!.closed) {
+      ref.current = create(); // StrictMode ran the cleanup once already
+      rerender();
     }
+    const current = ref.current!;
+    parent?.adopt(current);
     return () => {
       void current.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parent]);
-  return scope;
+  return ref.current;
 }
 
 /**
@@ -152,23 +159,35 @@ interface WorkerEntry<T> {
   disposed: boolean;
 }
 
-/** Creates the worker once per mount, wraps it, terminates it on unmount. */
+/**
+ * Creates the worker once per mount, wraps it, terminates it on unmount. The returned proxy is
+ * stable across renders and keeps working through a StrictMode remount (a new worker is spun up).
+ */
 export function useWorker<T>(factory: () => Worker): Remote<T> {
-  const ref = useRef<WorkerEntry<T> | null>(null);
+  const factoryRef = useRef(factory);
+  factoryRef.current = factory;
+  const entry = useRef<WorkerEntry<T> | null>(null);
   const create = (): WorkerEntry<T> => {
-    const worker = factory();
+    const worker = factoryRef.current();
     return { worker, api: wrap<T>(worker), disposed: false };
   };
-  ref.current ??= create();
+  entry.current ??= create();
+  const stable = useRef<Remote<T> | null>(null);
+  stable.current ??= new Proxy({} as Remote<T>, {
+    get(_t, prop) {
+      const api = entry.current!.api as unknown as Record<PropertyKey, unknown>;
+      return api[prop];
+    },
+  });
   useEffect(() => {
-    if (ref.current!.disposed) ref.current = create(); // StrictMode remount
-    const entry = ref.current!;
+    if (entry.current!.disposed) entry.current = create(); // StrictMode remount
+    const current = entry.current!;
     return () => {
-      entry.api[Symbol.dispose]();
-      entry.worker.terminate();
-      entry.disposed = true;
+      current.api[Symbol.dispose]();
+      current.worker.terminate();
+      current.disposed = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return ref.current.api;
+  return stable.current;
 }
