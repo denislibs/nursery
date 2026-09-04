@@ -9,8 +9,9 @@ const sig = () => new AbortController().signal;
 const sse = (body: string) => streamResponse([body], { headers: { 'content-type': 'text/event-stream' } });
 
 describe('sse reconnect with backoff', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  // real timers on purpose: response bodies are real streams in browsers and fake timers
+  // would run out before the next reconnect is scheduled; delays are tiny and the values the
+  // library reports through onRetry are computed, so the assertions stay exact
 
   test('a network error mid-stream reconnects after the delay with Last-Event-ID', async () => {
     let n = 0;
@@ -23,22 +24,16 @@ describe('sse reconnect with backoff', () => {
     const http = createHttp({ fetch: f.fetch });
     const c = new AbortController();
     const seen: string[] = [];
-    const loop = (async () => {
-      for await (const e of http.sse('https://x/e', {
-        signal: c.signal,
-        reconnect: { delay: 100, factor: 2 },
-      })) {
-        seen.push(e.data);
-        if (seen.length === 2) c.abort();
-      }
-    })();
-    await vi.advanceTimersByTimeAsync(0); // stream 1 ends → wait 100
-    await vi.advanceTimersByTimeAsync(100); // attempt 2 fails → wait 200
-    expect(seen).toEqual(['one']);
-    await vi.advanceTimersByTimeAsync(200); // attempt 3 succeeds
-    await vi.advanceTimersByTimeAsync(0);
-    await loop;
+    const delays: number[] = [];
+    for await (const e of http.sse('https://x/e', {
+      signal: c.signal,
+      reconnect: { delay: 5, factor: 2, onRetry: (_e, _a, d) => delays.push(d) },
+    })) {
+      seen.push(e.data);
+      if (seen.length === 2) c.abort();
+    }
     expect(seen).toEqual(['one', 'two']);
+    expect(delays).toEqual([5, 10]); // stream 1 ended → 5; attempt 2 failed → 10
     expect(f.calls[2]!.headers.get('last-event-id')).toBe('5');
   });
 
@@ -53,16 +48,13 @@ describe('sse reconnect with backoff', () => {
     );
     const http = createHttp({ fetch: f.fetch });
     const seen: string[] = [];
-    const loop = (async () => {
-      for await (const e of http.sse('https://x/e', { signal: sig(), reconnect: { delay: 10 } }))
+    const err = await (async () => {
+      for await (const e of http.sse('https://x/e', { signal: sig(), reconnect: { delay: 5 } }))
         seen.push(e.data);
-    })();
-    const outcome = loop.then(
+    })().then(
       () => 'ended',
       (e: unknown) => e,
     );
-    await vi.runAllTimersAsync();
-    const err = await outcome;
     expect(seen).toEqual(['a']);
     expect(err).toBeInstanceOf(HttpError);
     expect((err as HttpError).status).toBe(403);
@@ -80,27 +72,16 @@ describe('sse reconnect with backoff', () => {
     const http = createHttp({ fetch: f.fetch });
     const c = new AbortController();
     const seen: string[] = [];
-    const loop = (async () => {
-      for await (const e of http.sse('https://x/e', {
-        signal: c.signal,
-        reconnect: {
-          delay: 100,
-          factor: 10,
-          maxDelay: 300,
-          onRetry: (_e, _a, d) => {
-            delays.push(d);
-          },
-        },
-      })) {
-        seen.push(e.data);
-        if (seen.length === 3) c.abort();
-      }
-    })();
-    await vi.runAllTimersAsync();
-    await loop;
+    for await (const e of http.sse('https://x/e', {
+      signal: c.signal,
+      reconnect: { delay: 5, factor: 10, maxDelay: 30, onRetry: (_e, _a, d) => delays.push(d) },
+    })) {
+      seen.push(e.data);
+      if (seen.length === 3) c.abort();
+    }
     expect(seen).toEqual(['1', '4', '5']);
-    // after stream 1 ends: 100; attempt 2 fails: 300 (capped); attempt 3 fails: 300; success resets; after stream 4 ends: 100
-    expect(delays).toEqual([100, 300, 300, 100]);
+    // after stream 1 ends: 5; attempt 2 fails: 30 (capped); attempt 3 fails: 30; success resets; after stream 4 ends: 5
+    expect(delays).toEqual([5, 30, 30, 5]);
   });
 });
 
