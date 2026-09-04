@@ -1,39 +1,39 @@
 /// <reference lib="dom" />
 /**
- * Svelte 5 adapters. Import from 'scopekit/svelte'; requires svelte >= 5.
+ * Svelte 5 adapters. Import from 'nursery/svelte'; requires svelte >= 5.
  * Runes are compiler features, so the reactive re-run stays in your `$effect`; these helpers
- * give it a Scope and tie lifetimes to the component.
+ * give it a Nursery and tie lifetimes to the component.
  */
 import { onDestroy } from 'svelte';
 import { writable, type Readable } from 'svelte/store';
-import { isAbort } from '@scopekit/core/signal';
-import { Scope, type ScopeOptions } from '@scopekit/core/scope';
-import { latest } from '@scopekit/core/latest';
-import { on, type OnOptions } from '@scopekit/core/events';
-import { wrap, type Remote } from '@scopekit/core/worker';
+import { isAbort } from '@nursery/core/signal';
+import { Nursery, type NurseryOptions } from '@nursery/core/nursery';
+import { latest } from '@nursery/core/latest';
+import { on, type OnOptions } from '@nursery/core/events';
+import { wrap, type Remote } from '@nursery/core/worker';
 
-/** A scope that closes when the component is destroyed. */
-export function useScope(opts?: ScopeOptions): Scope {
-  const scope = new Scope(opts);
+/** A nursery that closes when the component is destroyed. */
+export function useNursery(opts?: NurseryOptions): Nursery {
+  const nursery = new Nursery(opts);
   onDestroy(() => {
-    void scope.close();
+    void nursery.close();
   });
-  return scope;
+  return nursery;
 }
 
 /**
- * Runs `effect` with a fresh Scope and returns the cleanup that closes it. Use inside $effect:
- *   $effect(() => scopedEffect(async scope => { user = await load(id, scope) }));
+ * Runs `effect` with a fresh Nursery and returns the cleanup that closes it. Use inside $effect:
+ *   $effect(() => nurseryEffect(async nursery => { user = await load(id, nursery) }));
  * Read reactive state synchronously, before the first await, so the effect tracks it.
  */
-export function scopedEffect(
-  effect: (scope: Scope) => void | Promise<void>,
-  opts?: ScopeOptions,
+export function nurseryEffect(
+  effect: (nursery: Nursery) => void | Promise<void>,
+  opts?: NurseryOptions,
 ): () => void {
-  const scope = new Scope(opts);
-  void scope.spawn((_sig, s) => Promise.resolve(effect(s)), { name: 'effect' });
+  const nursery = new Nursery(opts);
+  void nursery.spawn((_sig, s) => Promise.resolve(effect(s)), { name: 'effect' });
   return () => {
-    void scope.close();
+    void nursery.close();
   };
 }
 
@@ -72,16 +72,16 @@ export function useLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>)
 export function eventStream<E extends Event = Event>(
   target: EventTarget | null | undefined,
   type: string,
-  handler: (event: E, scope: Scope) => void | Promise<void>,
+  handler: (event: E, nursery: Nursery) => void | Promise<void>,
   opts?: Omit<OnOptions, 'signal'>,
 ): () => void {
   if (!target) return () => {};
-  const scope = new Scope({ name: `on:${type}` });
-  void scope.spawn(async (sig, s) => {
+  const nursery = new Nursery({ name: `on:${type}` });
+  void nursery.spawn(async (sig, s) => {
     for await (const e of on<E>(target, type, { ...opts, signal: sig })) await handler(e, s);
   });
   return () => {
-    void scope.close();
+    void nursery.close();
   };
 }
 
@@ -104,20 +104,20 @@ export type AsyncStoreState<T> =
 export interface AsyncStore<T> extends Readable<AsyncStoreState<T>> {
   /** Cancels the in-flight run (if any) and starts a new one. Call it from $effect to react to state. */
   refresh(): void;
-  /** The component-lifetime scope every run is a child of. */
-  readonly scope: Scope;
+  /** The component-lifetime nursery every run is a child of. */
+  readonly nursery: Nursery;
 }
 
 /**
  * Store-based async state for Svelte, since runes are compile-time and cannot live in a library.
  * Runs `fn` once immediately; call `refresh()` inside `$effect` to re-run when reactive inputs change:
- *   const user = asyncStore(scope => load(id, scope));
+ *   const user = asyncStore(nursery => load(id, nursery));
  *   $effect(() => { void id; user.refresh(); });
  */
-export function asyncStore<T>(fn: (scope: Scope) => Promise<T>, opts?: ScopeOptions): AsyncStore<T> {
-  const parent = useScope(opts);
+export function asyncStore<T>(fn: (nursery: Nursery) => Promise<T>, opts?: NurseryOptions): AsyncStore<T> {
+  const parent = useNursery(opts);
   const store = writable<AsyncStoreState<T>>({ status: 'loading' });
-  let current: Scope | undefined;
+  let current: Nursery | undefined;
   const refresh = () => {
     void current?.close();
     const run = parent.child({ name: 'asyncStore.run' });
@@ -133,5 +133,5 @@ export function asyncStore<T>(fn: (scope: Scope) => Promise<T>, opts?: ScopeOpti
     });
   };
   refresh();
-  return { subscribe: store.subscribe, refresh, scope: parent };
+  return { subscribe: store.subscribe, refresh, nursery: parent };
 }

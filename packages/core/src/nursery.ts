@@ -24,12 +24,12 @@ export function contextKey<T>(name: string, defaultValue?: T): ContextKey<T | un
   return new ContextKey<T | undefined>(name, defaultValue);
 }
 
-export interface ScopeOptions {
+export interface NurseryOptions {
   /** Shown in inspect()/dump() and in unhandled-error reports. */
   name?: string;
-  /** External signal the scope is linked to. */
+  /** External signal the nursery is linked to. */
   signal?: MaybeSignal;
-  /** Abort the scope with TimeoutError after this many ms. Also sets `deadline`. */
+  /** Abort the nursery with TimeoutError after this many ms. Also sets `deadline`. */
   timeout?: number;
   /** Default grace period for close(): how long to wait for tasks that ignore the signal. */
   grace?: number;
@@ -45,18 +45,18 @@ export interface ChildOptions {
   /**
    * Do not track the child in `parent.children`: the parent still cancels it through the
    * signal but does not wait for it on close. Call `parent.adopt(child)` to start tracking.
-   * Useful when a framework may create and discard a scope before committing it (React StrictMode).
+   * Useful when a framework may create and discard a nursery before committing it (React StrictMode).
    */
   detached?: boolean;
 }
 
 export interface CloseOptions {
-  /** Stop waiting after this many ms; stuck tasks are reported via Scope.onUnhandled. */
+  /** Stop waiting after this many ms; stuck tasks are reported via Nursery.onUnhandled. */
   grace?: number;
 }
 
-/** A cancellable unit of work owned by a scope. */
-export type ScopedTask<T> = (signal: AbortSignal, scope: Scope) => Promise<T>;
+/** A cancellable unit of work owned by a nursery. */
+export type NurseryTask<T> = (signal: AbortSignal, nursery: Nursery) => Promise<T>;
 
 export interface TaskInfo {
   readonly name: string;
@@ -66,39 +66,39 @@ export interface TaskInfo {
   readonly elapsed: number;
 }
 
-export interface ScopeTree {
+export interface NurseryTree {
   name: string;
   closed: boolean;
   aborted: boolean;
   tasks: TaskInfo[];
-  children: ScopeTree[];
+  children: NurseryTree[];
 }
 
 export interface UnhandledContext {
-  scope: Scope;
+  nursery: Nursery;
   task?: TaskInfo;
 }
 export type UnhandledHandler = (error: unknown, ctx: UnhandledContext) => void;
 
-export class ScopeClosedError extends Error {
+export class NurseryClosedError extends Error {
   constructor() {
-    super('Scope is closed');
-    this.name = 'ScopeClosedError';
+    super('Nursery is closed');
+    this.name = 'NurseryClosedError';
   }
 }
 
 /** Reported when close({ grace }) gave up waiting on tasks that ignore their signal. */
-export class ScopeStuckError extends Error {
+export class NurseryStuckError extends Error {
   constructor(
-    readonly scopeName: string,
+    readonly nurseryName: string,
     readonly tasks: TaskInfo[],
   ) {
     super(
-      `Scope "${scopeName}" closed with ${tasks.length} stuck task(s): ${tasks
+      `Nursery "${nurseryName}" closed with ${tasks.length} stuck task(s): ${tasks
         .map(t => `${t.name} (${Math.round(t.elapsed)}ms)`)
         .join(', ')}`,
     );
-    this.name = 'ScopeStuckError';
+    this.name = 'NurseryStuckError';
   }
 }
 
@@ -131,9 +131,9 @@ interface TaskRecord {
 }
 
 const unhandledHandlers = new Set<UnhandledHandler>();
-let scopeCounter = 0;
+let nurseryCounter = 0;
 
-// Implicit "current scope": AsyncContext.Variable when the platform has it (survives awaits),
+// Implicit "current nursery": AsyncContext.Variable when the platform has it (survives awaits),
 // otherwise a synchronous stack that is only valid until the first await.
 interface AsyncVariable<T> {
   get(): T | undefined;
@@ -141,10 +141,10 @@ interface AsyncVariable<T> {
 }
 const AsyncContextVariable = (globalThis as { AsyncContext?: { Variable?: new <T>() => AsyncVariable<T> } })
   .AsyncContext?.Variable;
-const asyncVar: AsyncVariable<Scope> | undefined = AsyncContextVariable
-  ? new AsyncContextVariable<Scope>()
+const asyncVar: AsyncVariable<Nursery> | undefined = AsyncContextVariable
+  ? new AsyncContextVariable<Nursery>()
   : undefined;
-let syncCurrent: Scope | undefined;
+let syncCurrent: Nursery | undefined;
 
 type TaskStatus = 'ok' | 'error' | 'aborted';
 function measure(name: string, start: number, detail: Record<string, unknown>): void {
@@ -159,34 +159,34 @@ function report(error: unknown, ctx: UnhandledContext): void {
   if (unhandledHandlers.size === 0) {
     // Default sink: nobody subscribed, so the error must at least reach the console.
     // oxlint-disable-next-line no-console
-    console.error('[scopekit] unhandled task error in scope "%s":', ctx.scope.name, error);
+    console.error('[nursery] unhandled task error in nursery "%s":', ctx.nursery.name, error);
     return;
   }
   for (const h of unhandledHandlers) h(error, ctx);
 }
 
 /**
- * Structured-concurrency scope: one AbortSignal, one context, a tracked set of children.
- * - spawn() runs a task bound to the scope's signal.
+ * Structured-concurrency nursery: one AbortSignal, one context, a tracked set of children.
+ * - spawn() runs a task bound to the nursery's signal.
  * - The first non-abort failure of a child aborts every sibling (fail-fast).
  * - close() (or `await using`) aborts what is still running and waits for everything to settle.
  */
-export class Scope implements AsyncDisposable {
-  /** When true, every task and scope lifetime is recorded via performance.measure('scopekit:...'). */
+export class Nursery implements AsyncDisposable {
+  /** When true, every task and nursery lifetime is recorded via performance.measure('nursery:...'). */
   static profiling = false;
 
   readonly name: string;
   readonly signal: AbortSignal;
-  /** Absolute performance.now() deadline, the earliest of this scope's and its ancestors'. */
+  /** Absolute performance.now() deadline, the earliest of this nursery's and its ancestors'. */
   readonly deadline: number | undefined;
   readonly #createdAt = performance.now();
 
-  #parent: Scope | undefined;
+  #parent: Nursery | undefined;
   #bindings = new Map<ContextKey<unknown>, unknown>();
   #ctrl = new AbortController();
   #unlink: () => void;
   #tasks = new Set<TaskRecord>();
-  #children = new Set<Scope>();
+  #children = new Set<Nursery>();
   #cleanups: Array<() => unknown> = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
   #grace: number | undefined;
@@ -197,8 +197,8 @@ export class Scope implements AsyncDisposable {
   #taskCounter = 0;
   #stuckCount = 0;
 
-  constructor(opts: ScopeOptions = {}, parent?: Scope) {
-    this.name = opts.name ?? `scope#${++scopeCounter}`;
+  constructor(opts: NurseryOptions = {}, parent?: Nursery) {
+    this.name = opts.name ?? `nursery#${++nurseryCounter}`;
     this.#parent = parent;
     this.#grace = opts.grace ?? (parent ? parent.#grace : undefined);
     for (const b of opts.ctx ?? []) this.#bindings.set(b.key, b.value);
@@ -214,25 +214,25 @@ export class Scope implements AsyncDisposable {
           : Math.min(own, parent.deadline);
     if (opts.timeout !== undefined) {
       this.#timer = setTimeout(
-        () => this.abort(timeoutError(`Scope "${this.name}" timed out after ${opts.timeout}ms`)),
+        () => this.abort(timeoutError(`Nursery "${this.name}" timed out after ${opts.timeout}ms`)),
         opts.timeout,
       );
     }
   }
 
   /**
-   * The scope whose task is currently executing. Reliable in the synchronous part of a task or
-   * of enter(); across awaits only where AsyncContext exists. Prefer passing the scope explicitly.
+   * The nursery whose task is currently executing. Reliable in the synchronous part of a task or
+   * of enter(); across awaits only where AsyncContext exists. Prefer passing the nursery explicitly.
    */
-  static current(): Scope | undefined {
+  static current(): Nursery | undefined {
     return asyncVar ? asyncVar.get() : syncCurrent;
   }
 
-  /** Runs `fn` with this scope as Scope.current(). */
+  /** Runs `fn` with this nursery as Nursery.current(). */
   enter<R>(fn: () => R): R {
     if (asyncVar) return asyncVar.run(this, fn);
     const prev = syncCurrent;
-    // oxlint-disable-next-line typescript/no-this-alias -- module-level "current scope" slot
+    // oxlint-disable-next-line typescript/no-this-alias -- module-level "current nursery" slot
     syncCurrent = this;
     try {
       return fn();
@@ -247,20 +247,20 @@ export class Scope implements AsyncDisposable {
     return () => unhandledHandlers.delete(handler);
   }
 
-  /** Runs `body` inside a fresh scope and closes it afterwards, whatever happens. */
-  static async run<T>(body: (scope: Scope) => Promise<T>, opts: ScopeOptions = {}): Promise<T> {
-    const scope = new Scope(opts);
-    scope.#surfaces = true;
+  /** Runs `body` inside a fresh nursery and closes it afterwards, whatever happens. */
+  static async run<T>(body: (nursery: Nursery) => Promise<T>, opts: NurseryOptions = {}): Promise<T> {
+    const nursery = new Nursery(opts);
+    nursery.#surfaces = true;
     let result: T;
     try {
-      result = await scope.enter(() => body(scope));
+      result = await nursery.enter(() => body(nursery));
     } catch (err) {
-      await scope.close();
+      await nursery.close();
       // The body usually dies of the AbortError caused by a failing sibling; surface the cause.
-      throw scope.#error !== undefined && isAbort(err) ? scope.#error : err;
+      throw nursery.#error !== undefined && isAbort(err) ? nursery.#error : err;
     }
-    await scope.close();
-    if (scope.#error !== undefined) throw scope.#error;
+    await nursery.close();
+    if (nursery.#error !== undefined) throw nursery.#error;
     return result;
   }
 
@@ -278,8 +278,8 @@ export class Scope implements AsyncDisposable {
     return [...this.#tasks].map(taskInfo);
   }
 
-  /** Open child scopes. */
-  get children(): Scope[] {
+  /** Open child nurseries. */
+  get children(): Nursery[] {
     return [...this.#children];
   }
 
@@ -295,14 +295,14 @@ export class Scope implements AsyncDisposable {
     return key.defaultValue as T;
   }
 
-  /** True if the key is bound explicitly in this scope or an ancestor. */
+  /** True if the key is bound explicitly in this nursery or an ancestor. */
   has(key: ContextKey<unknown>): boolean {
     return this.#bindings.has(key) || (this.#parent?.has(key) ?? false);
   }
 
-  /** Runs `task` with this scope's signal. Failure aborts the siblings. */
-  spawn<T>(task: ScopedTask<T>, opts: SpawnOptions = {}): Promise<T> {
-    if (this.#closed) return Promise.reject(new ScopeClosedError());
+  /** Runs `task` with this nursery's signal. Failure aborts the siblings. */
+  spawn<T>(task: NurseryTask<T>, opts: SpawnOptions = {}): Promise<T> {
+    if (this.#closed) return Promise.reject(new NurseryClosedError());
     const inner = this.enter(() => (async () => task(this.signal, this))());
     const rec: TaskRecord = {
       name: opts.name ?? `task#${++this.#taskCounter}`,
@@ -310,10 +310,10 @@ export class Scope implements AsyncDisposable {
       inner,
     };
     this.#tasks.add(rec);
-    if (Scope.profiling) {
+    if (Nursery.profiling) {
       const record = (status: TaskStatus) =>
-        measure(`scopekit:${this.name}/${rec.name}`, rec.startedAt, {
-          scope: this.name,
+        measure(`nursery:${this.name}/${rec.name}`, rec.startedAt, {
+          nursery: this.name,
           task: rec.name,
           status,
         });
@@ -347,16 +347,16 @@ export class Scope implements AsyncDisposable {
     return outer;
   }
 
-  /** A nested scope: inherits ctx, cancellation and deadline; closing the parent waits for it. */
-  child(opts: ScopeOptions = {}, childOpts: ChildOptions = {}): Scope {
-    const scope = new Scope(opts, this);
-    if (!childOpts.detached) this.#children.add(scope);
-    return scope;
+  /** A nested nursery: inherits ctx, cancellation and deadline; closing the parent waits for it. */
+  child(opts: NurseryOptions = {}, childOpts: ChildOptions = {}): Nursery {
+    const nursery = new Nursery(opts, this);
+    if (!childOpts.detached) this.#children.add(nursery);
+    return nursery;
   }
 
   /** Starts tracking a child created with `{ detached: true }`. Idempotent. */
-  adopt(child: Scope): void {
-    if (child.#parent !== this) throw new TypeError('adopt(): scope is not a child of this scope');
+  adopt(child: Nursery): void {
+    if (child.#parent !== this) throw new TypeError('adopt(): nursery is not a child of this nursery');
     if (!child.#closed && !this.#closed) this.#children.add(child);
   }
 
@@ -365,11 +365,11 @@ export class Scope implements AsyncDisposable {
     this.#cleanups.push(fn);
   }
 
-  abort(reason: unknown = abortError(`Scope "${this.name}" aborted`)): void {
+  abort(reason: unknown = abortError(`Nursery "${this.name}" aborted`)): void {
     this.#ctrl.abort(reason);
   }
 
-  /** Resolves once every task and child scope has settled (does not abort anything). */
+  /** Resolves once every task and child nursery has settled (does not abort anything). */
   async settled(): Promise<void> {
     while (this.#tasks.size > 0 || this.#children.size > 0) {
       await Promise.allSettled([
@@ -380,7 +380,7 @@ export class Scope implements AsyncDisposable {
   }
 
   /**
-   * Aborts running tasks, waits for them (up to `grace` ms if given), closes child scopes,
+   * Aborts running tasks, waits for them (up to `grace` ms if given), closes child nurseries,
    * then runs deferred cleanups. Idempotent.
    */
   close(opts: CloseOptions = {}): Promise<void> {
@@ -393,8 +393,8 @@ export class Scope implements AsyncDisposable {
     await this.close();
   }
 
-  /** Snapshot of this scope and its descendants. */
-  inspect(): ScopeTree {
+  /** Snapshot of this nursery and its descendants. */
+  inspect(): NurseryTree {
     return {
       name: this.name,
       closed: this.#closed,
@@ -404,10 +404,10 @@ export class Scope implements AsyncDisposable {
     };
   }
 
-  /** Human-readable tree of scopes and running tasks. */
+  /** Human-readable tree of nurseries and running tasks. */
   dump(): string {
     const lines: string[] = [];
-    const walk = (t: ScopeTree, indent: string) => {
+    const walk = (t: NurseryTree, indent: string) => {
       const state = t.closed ? 'closed' : t.aborted ? 'aborting' : 'open';
       lines.push(`${indent}${t.name} [${state}]`);
       for (const task of t.tasks) lines.push(`${indent}  - ${task.name} ${Math.round(task.elapsed)}ms`);
@@ -420,7 +420,7 @@ export class Scope implements AsyncDisposable {
   async #doClose(grace: number | undefined): Promise<void> {
     this.#closed = true;
     clearTimeout(this.#timer);
-    if (!this.signal.aborted) this.abort(abortError(`Scope "${this.name}" closed`));
+    if (!this.signal.aborted) this.abort(abortError(`Nursery "${this.name}" closed`));
     for (const c of this.#children) void c.close({ grace });
     await this.#awaitSettled(grace);
     while (this.#cleanups.length > 0) {
@@ -428,8 +428,8 @@ export class Scope implements AsyncDisposable {
     }
     if (this.#parent) this.#parent.#children.delete(this);
     this.#unlink();
-    if (Scope.profiling)
-      measure(`scopekit:${this.name}`, this.#createdAt, { scope: this.name, stuck: this.#stuckCount });
+    if (Nursery.profiling)
+      measure(`nursery:${this.name}`, this.#createdAt, { nursery: this.name, stuck: this.#stuckCount });
   }
 
   async #awaitSettled(grace: number | undefined): Promise<void> {
@@ -441,7 +441,7 @@ export class Scope implements AsyncDisposable {
     if (outcome === 'settled') return;
     const stuck = this.#collectStuck();
     this.#stuckCount = stuck.length;
-    if (stuck.length > 0) report(new ScopeStuckError(this.name, stuck), { scope: this });
+    if (stuck.length > 0) report(new NurseryStuckError(this.name, stuck), { nursery: this });
     // Detach: cleanups still run, but we stop waiting for tasks that will never finish.
     this.#tasks.clear();
     for (const c of this.#children) c.#detachStuck();
@@ -462,8 +462,8 @@ export class Scope implements AsyncDisposable {
 
   #checkUnhandled(rec: TaskRecord): void {
     if (!rec.error || rec.outer?.handled) return;
-    if (this.#surfaces && rec.error.err === this.#error) return; // Scope.run rethrows it
-    report(rec.error.err, { scope: this, task: taskInfo(rec) });
+    if (this.#surfaces && rec.error.err === this.#error) return; // Nursery.run rethrows it
+    report(rec.error.err, { nursery: this, task: taskInfo(rec) });
   }
 }
 

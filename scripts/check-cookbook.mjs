@@ -1,4 +1,4 @@
-// Every `import { x } from '@scopekit/...'` in the cookbook must name a real export.
+// Every `import { x } from '@nursery/...'` in the cookbook must name a real export.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -9,7 +9,7 @@ const coreModules = [
   'combine',
   'limit',
   'latest',
-  'scope',
+  'nursery',
   'events',
   'iter',
   'schedule',
@@ -31,15 +31,15 @@ const cache = new Map();
 const exportsOf = spec => {
   if (cache.has(spec)) return cache.get(spec);
   let names;
-  if (spec === '@scopekit/core') {
+  if (spec === '@nursery/core') {
     names = new Set(['iter']);
     for (const m of coreModules)
       for (const n of exportsOfFile(join(repo, 'packages/core/src', m + '.ts'))) names.add(n);
-  } else if (spec.startsWith('@scopekit/core/')) {
-    const m = spec.slice('@scopekit/core/'.length);
+  } else if (spec.startsWith('@nursery/core/')) {
+    const m = spec.slice('@nursery/core/'.length);
     names = coreModules.includes(m) ? exportsOfFile(join(repo, 'packages/core/src', m + '.ts')) : new Set();
   } else {
-    const a = spec.slice('@scopekit/'.length);
+    const a = spec.slice('@nursery/'.length);
     names = adapters.has(a) ? exportsOfFile(join(repo, 'packages', a, 'src/index.ts')) : new Set();
   }
   cache.set(spec, names);
@@ -48,7 +48,7 @@ const exportsOf = spec => {
 let bad = 0;
 for (const f of readdirSync(join(repo, 'cookbook'))) {
   const text = readFileSync(join(repo, 'cookbook', f), 'utf8');
-  for (const m of text.matchAll(/import \{([^}]+)\} from '(@scopekit\/[a-z/]+)'/g)) {
+  for (const m of text.matchAll(/import \{([^}]+)\} from '(@nursery\/[a-z/]+)'/g)) {
     const names = exportsOf(m[2]);
     for (const raw of m[1].split(',')) {
       const n = raw
@@ -61,9 +61,9 @@ for (const f of readdirSync(join(repo, 'cookbook'))) {
       }
     }
   }
-  for (const m of text.matchAll(/from 'scopekit(\/[a-z]+)?'/g)) {
+  for (const m of text.matchAll(/from 'nursery(\/[a-z]+)?'/g)) {
     bad++;
-    console.log(`${f}: legacy import ${m[0]}, use @scopekit/...`);
+    console.log(`${f}: legacy import ${m[0]}, use @nursery/...`);
   }
 }
 console.log(bad ? `${bad} problems` : 'cookbook imports OK');

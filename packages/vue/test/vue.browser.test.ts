@@ -1,6 +1,6 @@
 import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue';
-import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorker } from '../src/index.js';
-import { sleep, isAbort } from '@scopekit/core/signal';
+import { useNursery, useNurseryWatch, useAsync, useLatest, useEventStream, useWorker } from '../src/index.js';
+import { sleep, isAbort } from '@nursery/core/signal';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
 let container: HTMLDivElement;
@@ -20,13 +20,13 @@ const mount = (component: ReturnType<typeof defineComponent>, props?: Record<str
   return app;
 };
 
-describe('useScope', () => {
-  test('scope closes when the component unmounts', async () => {
+describe('useNursery', () => {
+  test('nursery closes when the component unmounts', async () => {
     let signal!: AbortSignal;
     mount(
       defineComponent({
         setup() {
-          signal = useScope().signal;
+          signal = useNursery().signal;
           return () => h('div');
         },
       }),
@@ -39,16 +39,16 @@ describe('useScope', () => {
   });
 });
 
-describe('useScopedWatch', () => {
-  test('re-runs with a fresh scope when a dependency changes, closing the old one', async () => {
+describe('useNurseryWatch', () => {
+  test('re-runs with a fresh nursery when a dependency changes, closing the old one', async () => {
     const id = ref(1);
     const signals: AbortSignal[] = [];
     mount(
       defineComponent({
         setup() {
-          useScopedWatch(scope => {
+          useNurseryWatch(nursery => {
             void id.value;
-            signals.push(scope.signal);
+            signals.push(nursery.signal);
           });
           return () => h('div');
         },
@@ -69,9 +69,9 @@ describe('useAsync', () => {
     mount(
       defineComponent({
         setup() {
-          state = useAsync(async scope => {
+          state = useAsync(async nursery => {
             const cur = id.value;
-            await sleep(cur === 1 ? 50 : 5, scope.signal);
+            await sleep(cur === 1 ? 50 : 5, nursery.signal);
             return `user-${cur}`;
           });
           return () => h('div');

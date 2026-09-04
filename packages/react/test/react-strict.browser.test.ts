@@ -1,9 +1,9 @@
 import { createElement, StrictMode, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { useScope, useScopedEffect, useWorker, ScopeProvider } from '../src/index.js';
-import { Scope } from '@scopekit/core/scope';
-import { sleep } from '@scopekit/core/signal';
+import { useNursery, useNurseryEffect, useWorker, NurseryProvider } from '../src/index.js';
+import { Nursery } from '@nursery/core/nursery';
+import { sleep } from '@nursery/core/signal';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
 declare global {
@@ -27,14 +27,14 @@ const render = (node: Parameters<Root['render']>[0]) =>
   act(async () => root.render(createElement(StrictMode, null, node)));
 
 describe('React StrictMode', () => {
-  test('useScope under a provider leaves exactly one tracked child after mount and none after unmount', async () => {
-    const page = new Scope({ name: 'page' });
-    let seen: Scope | undefined;
+  test('useNursery under a provider leaves exactly one tracked child after mount and none after unmount', async () => {
+    const page = new Nursery({ name: 'page' });
+    let seen: Nursery | undefined;
     function C() {
-      seen = useScope();
+      seen = useNursery();
       return null;
     }
-    await render(createElement(ScopeProvider, { scope: page }, createElement(C)));
+    await render(createElement(NurseryProvider, { nursery: page }, createElement(C)));
     expect(page.children).toHaveLength(1);
     expect(seen!.closed).toBe(false);
     expect(page.children[0]).toBe(seen);
@@ -44,11 +44,11 @@ describe('React StrictMode', () => {
     await page.close();
   });
 
-  test('useScopedEffect runs the effect body for the surviving scope only once', async () => {
+  test('useNurseryEffect runs the effect body for the surviving nursery only once', async () => {
     const runs: AbortSignal[] = [];
     function C() {
-      useScopedEffect(scope => {
-        runs.push(scope.signal);
+      useNurseryEffect(nursery => {
+        runs.push(nursery.signal);
       }, []);
       return null;
     }
@@ -82,8 +82,8 @@ describe('React StrictMode', () => {
     let rendered = '';
     function C() {
       const [v, setV] = useState('init');
-      useScopedEffect(async scope => {
-        await sleep(5, scope.signal);
+      useNurseryEffect(async nursery => {
+        await sleep(5, nursery.signal);
         setV('loaded');
       }, []);
       rendered = v;

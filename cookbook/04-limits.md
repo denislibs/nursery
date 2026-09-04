@@ -1,9 +1,9 @@
 # Лимиты конкурентности
 
 ```ts
-import { Semaphore, Mutex, map, mapSettled, Queue } from '@scopekit/core/limit';
-import { sleep } from '@scopekit/core/signal';
-import { wrap } from '@scopekit/core/worker';
+import { Semaphore, Mutex, map, mapSettled, Queue } from '@nursery/core/limit';
+import { sleep } from '@nursery/core/signal';
+import { wrap } from '@nursery/core/worker';
 ```
 
 ## map: обработать список с ограничением
@@ -11,7 +11,7 @@ import { wrap } from '@scopekit/core/worker';
 ```ts
 const thumbnails = await map(files, (file, i, sig) => makeThumbnail(file, sig), {
   concurrency: 4,
-  signal: scope.signal,
+  signal: nursery.signal,
 });
 ```
 
@@ -29,7 +29,7 @@ async function* pages(sig: AbortSignal) {
     yield* page;
   }
 }
-const enriched = await map(pages(scope.signal), (item, _i, sig) => enrich(item, sig), { concurrency: 8 });
+const enriched = await map(pages(nursery.signal), (item, _i, sig) => enrich(item, sig), { concurrency: 8 });
 ```
 
 Здесь `map` тянет страницы по мере необходимости, а не грузит всё в память.
@@ -102,7 +102,7 @@ export function getConfig(signal: AbortSignal) {
 `map` знает весь список заранее. `Queue` живёт долго, задачи прилетают по событиям.
 
 ```ts
-const saveQueue = new Queue({ concurrency: 1, signal: scope.signal });
+const saveQueue = new Queue({ concurrency: 1, signal: nursery.signal });
 
 editor.on('change', doc => {
   saveQueue.clear();                                // черновики, которые не успели, не нужны
@@ -153,20 +153,20 @@ export function rateLimiter(perSecond: number) {
 }
 
 const limited = rateLimiter(5);
-await limited(sig => http.get('/search', { signal: sig, query: { q } }), scope.signal);
+await limited(sig => http.get('/search', { signal: sig, query: { q } }), nursery.signal);
 ```
 
-## Ограничить параллелизм внутри Scope
+## Ограничить параллелизм внутри Nursery
 
 ```ts
-await Scope.run(async scope => {
+await Nursery.run(async nursery => {
   const sem = new Semaphore(2);
-  const tasks = ids.map(id => scope.spawn(sig => sem.run(s => api.detail(id, s), sig)));
+  const tasks = ids.map(id => nursery.spawn(sig => sem.run(s => api.detail(id, s), sig)));
   return Promise.all(tasks);
 });
 ```
 
-Fail-fast скоупа и лимит семафора работают вместе: ошибка одной задачи отменяет остальные,
+Fail-fast nursery и лимит семафора работают вместе: ошибка одной задачи отменяет остальные,
 включая тех, кто ещё ждёт разрешения.
 
 ## Чего не делать
@@ -182,7 +182,7 @@ Fail-fast скоупа и лимит семафора работают вмес�
 Картинки в видимой области должны грузиться раньше остальных:
 
 ```ts
-const images = new Queue({ concurrency: 4, signal: scope.signal });
+const images = new Queue({ concurrency: 4, signal: nursery.signal });
 
 function load(img: HTMLImageElement, visible: boolean) {
   return images.add(sig => fetchImage(img.dataset.src!, sig), { priority: visible ? 10 : 0 });
@@ -203,7 +203,7 @@ window.addEventListener('scroll', () => {
   prefetch.pause();
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => prefetch.resume(), 300);
-}, { passive: true, signal: scope.signal });
+}, { passive: true, signal: nursery.signal });
 ```
 
 `pause` не трогает выполняющиеся задачи и не мешает `add`. `Semaphore.tryAcquire()` даёт

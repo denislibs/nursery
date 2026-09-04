@@ -1,16 +1,16 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createHttp } from '@scopekit/core/http';
-import { Scope } from '@scopekit/core/scope';
-import { callback } from '@scopekit/core/worker';
-import { isAbort } from '@scopekit/core/signal';
-import { useAsync, useLatest, useScope, useScopedEffect, useWorker } from '@scopekit/react';
+import { createHttp } from '@nursery/core/http';
+import { Nursery } from '@nursery/core/nursery';
+import { callback } from '@nursery/core/worker';
+import { isAbort } from '@nursery/core/signal';
+import { useAsync, useLatest, useNursery, useNurseryEffect, useWorker } from '@nursery/react';
 import { server } from './mock-server';
 import type { api as HeavyApi } from './heavy.worker';
 
 const http = createHttp({ fetch: server.fetch, retry: { retries: 2, delay: 300 }, timeout: 5000 });
-Scope.profiling = true;
-Scope.onUnhandled((err, { scope, task }) => console.error('[unhandled]', scope.name, task?.name, err));
+Nursery.profiling = true;
+Nursery.onUnhandled((err, { nursery, task }) => console.error('[unhandled]', nursery.name, task?.name, err));
 
 function Search() {
   const [items, setItems] = useState<Array<{ id: string; label: string }>>([]);
@@ -29,7 +29,7 @@ function Search() {
 
 function Report() {
   const [n, setN] = useState(0);
-  const report = useAsync(scope => http.get<{ generatedAt: string }>('/report', { scope }), [n]);
+  const report = useAsync(nursery => http.get<{ generatedAt: string }>('/report', { nursery }), [n]);
   return (
     <section>
       <h3>useAsync + retry: the mock returns 503 half of the time</h3>
@@ -41,8 +41,8 @@ function Report() {
 
 function Events() {
   const [lines, setLines] = useState<string[]>([]);
-  useScopedEffect(async scope => {
-    for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000 } })) {
+  useNurseryEffect(async nursery => {
+    for await (const e of http.sse('/events', { nursery, reconnect: { delay: 1000 } })) {
       setLines(l => [...l.slice(-9), `${e.event} #${e.id}: ${e.data}`]);
     }
   }, []);
@@ -56,7 +56,7 @@ function Events() {
 
 function Worker() {
   const heavy = useWorker<typeof HeavyApi>(() => new globalThis.Worker(new URL('./heavy.worker.ts', import.meta.url), { type: 'module' }));
-  const scope = useScope();
+  const nursery = useNursery();
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<string>('');
   const [ctrl, setCtrl] = useState<AbortController | null>(null);
@@ -76,14 +76,14 @@ function Worker() {
       <button onClick={start} disabled={!!ctrl}>count primes below 3M</button>
       <button onClick={() => ctrl?.abort()} disabled={!ctrl}>cancel</button>
       <progress value={progress} max={1} /> {result}
-      <pre>{scope.dump()}</pre>
+      <pre>{nursery.dump()}</pre>
     </section>
   );
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <h1>scopekit playground</h1>
+    <h1>nursery playground</h1>
     <Search />
     <Report />
     <Events />

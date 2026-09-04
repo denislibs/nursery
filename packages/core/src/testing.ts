@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 /**
- * Test helpers for code built on scopekit. Framework-agnostic; fakeClock() takes the test
+ * Test helpers for code built on nursery. Framework-agnostic; fakeClock() takes the test
  * runner's fake-timer object (vitest's `vi` works as is).
  */
 import { expose, type PoolEndpoint } from './worker.js';

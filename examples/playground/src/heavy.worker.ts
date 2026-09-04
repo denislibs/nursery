@@ -1,5 +1,5 @@
-import { expose } from '@scopekit/core/worker';
-import { throwIfAborted } from '@scopekit/core/signal';
+import { expose } from '@nursery/core/worker';
+import { throwIfAborted } from '@nursery/core/signal';
 
 export const api = {
   async primes(limit: number, o: { signal: AbortSignal; onProgress: (p: number) => void }) {

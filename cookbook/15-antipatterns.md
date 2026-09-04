@@ -3,12 +3,12 @@
 Список того, что регулярно всплывает на ревью, и как это исправить.
 
 ```ts
-import { Scope } from '@scopekit/core/scope';
-import { isAbort, sleep } from '@scopekit/core/signal';
-import { retry, withTimeout } from '@scopekit/core/combine';
-import { latest } from '@scopekit/core/latest';
-import { on } from '@scopekit/core/events';
-import { useScopedEffect } from '@scopekit/react';
+import { Nursery } from '@nursery/core/nursery';
+import { isAbort, sleep } from '@nursery/core/signal';
+import { retry, withTimeout } from '@nursery/core/combine';
+import { latest } from '@nursery/core/latest';
+import { on } from '@nursery/core/events';
+import { useNurseryEffect } from '@nursery/react';
 ```
 
 ## Функция без signal
@@ -48,7 +48,7 @@ try { await load(signal); } catch (e) { if (!isAbort(e)) toast('Ошибка'); 
 
 ```ts
 // плохо: sleep без сигнала не бросит при unmount, setState уйдёт в мёртвый компонент
-useScopedEffect(async scope => {
+useNurseryEffect(async nursery => {
   await sleep(500);
   setOpen(true);
 }, []);
@@ -56,8 +56,8 @@ useScopedEffect(async scope => {
 
 ```ts
 // хорошо
-useScopedEffect(async scope => {
-  await sleep(500, scope.signal);
+useNurseryEffect(async nursery => {
+  await sleep(500, nursery.signal);
   setOpen(true);
 }, []);
 ```
@@ -76,7 +76,7 @@ await withTimeout(sig => retry(s => api.x(s), { retries: 3, signal: sig }), 5000
 await retry(sig => api.x(sig), { retries: 3, attemptTimeout: 5000 });
 ```
 
-## Promise.all вместо Scope
+## Promise.all вместо Nursery
 
 ```ts
 // плохо: при ошибке b запрос a продолжает жить
@@ -85,27 +85,27 @@ const [a, b] = await Promise.all([api.a(signal), api.b(signal)]);
 
 ```ts
 // хорошо
-const [a, b] = await Scope.run(async scope =>
-  Promise.all([scope.spawn(sig => api.a(sig)), scope.spawn(sig => api.b(sig))]),
+const [a, b] = await Nursery.run(async nursery =>
+  Promise.all([nursery.spawn(sig => api.a(sig)), nursery.spawn(sig => api.b(sig))]),
   { signal });
 ```
 
-## Глобальный Scope
+## Глобальный Nursery
 
-Скоуп, который никогда не закрывается, это `AbortController`, который никогда не абортится,
+Nursery, который никогда не закрывается, это `AbortController`, который никогда не абортится,
 плюс fail-fast, который однажды отменит всё приложение из-за одного упавшего прогрева
-кеша. Скоуп на экран, виджет, операцию.
+кеша. Nursery на экран, виджет, операцию.
 
-## spawn без await и без catch в долгоживущем скоупе
+## spawn без await и без catch в долгоживущем nursery
 
 ```ts
 // плохо: ошибка тихо отменит соседей, никто не узнает
-pageScope.spawn(sig => prefetch(sig));
+pageNursery.spawn(sig => prefetch(sig));
 ```
 
 ```ts
 // хорошо: либо await, либо ловим внутри
-pageScope.spawn(sig => prefetch(sig).catch(err => { if (!isAbort(err)) log.warn(err); }));
+pageNursery.spawn(sig => prefetch(sig).catch(err => { if (!isAbort(err)) log.warn(err); }));
 ```
 
 ## Channel.send с .catch как «неблокирующая отправка»
@@ -123,7 +123,7 @@ search(q);
 
 ```ts
 // хорошо
-search(q, scope.signal);
+search(q, nursery.signal);
 // или useLatestCallback из React-рецептов, он вызывает cancel() при unmount
 ```
 
@@ -165,4 +165,4 @@ for await (const e of on(el, 'pointermove', { signal, buffer: 1 })) await heavy(
 
 ## Комментарии вида «// TODO: добавить отмену»
 
-Добавить отмену потом дороже, чем сразу. Сигнал в сигнатуре, скоуп в эффекте.
+Добавить отмену потом дороже, чем сразу. Сигнал в сигнатуре, nursery в эффекте.

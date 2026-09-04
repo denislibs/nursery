@@ -1,4 +1,4 @@
-# scopekit
+# nursery
 
 English: [README.md](README.md).
 
@@ -15,17 +15,17 @@ English: [README.md](README.md).
 
 ## Импорт
 
-Корневой вход `@scopekit/core` реэкспортирует всё. Каждый модуль доступен и как subpath, это
+Корневой вход `@nursery/core` реэкспортирует всё. Каждый модуль доступен и как subpath, это
 гарантирует tree-shaking в любом бандлере и позволяет не тянуть `http` и `worker` в общий чанк:
 
 ```ts
-import { Scope } from '@scopekit/core';              // корень
-import { debounce } from '@scopekit/core/iter';      // subpath: только debounce и его зависимости
-import { createHttp } from '@scopekit/core/http';
+import { Nursery } from '@nursery/core';              // корень
+import { debounce } from '@nursery/core/iter';      // subpath: только debounce и его зависимости
+import { createHttp } from '@nursery/core/http';
 ```
 
 Через корень namespace `iter` шейкается rolldown/rollup, но не esbuild, поэтому для операторов
-предпочтителен `@scopekit/core/iter`.
+предпочтителен `@nursery/core/iter`.
 
 ## Модули
 
@@ -35,63 +35,63 @@ import { createHttp } from '@scopekit/core/http';
 | `combine` | `withTimeout`, `retry`, `race`, `settle` |
 | `limit` | `Semaphore` (+ `tryAcquire`), `Mutex`, `map`, `mapSettled`, `Queue` (+ `pause`/`resume`, priority) |
 | `latest` | `latest`, `latestBy`, `singleFlight` |
-| `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError`, `ScopeStuckError` |
+| `nursery` | `Nursery`, `contextKey`, `ContextKey`, `NurseryClosedError`, `NurseryStuckError` |
 | `events` | `on`, `Channel` (+ `trySend`, `tryReceive`), `select`, `ChannelClosedError` |
 | `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `zip`, `combineLatest`, `share`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
 | `schedule` | `yieldToMain`, `postTask`, `idle`, `frame`, `frameInterval`, `chunked` (бюджет по частоте экрана) |
 | `http` | `createHttp`, `HttpError` |
 | `worker` | `expose`, `wrap`, `transfer`, `callback`, `createPool` |
 | `testing` | `fakeFetch`, `jsonResponse`, `streamResponse`, `textStream`, `tick`, `settle`, `expectAborted`, `fakeClock`, `portPair`, `mockWorker` |
-| `react` | `ScopeProvider`, `useScope`, `useScopedEffect`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
-| `vue` | `useScope`, `useScopedWatch`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
-| `solid` | `createScope`, `scopedEffect`, `createAsync`, `createLatest`, `createEventStream`, `createWorker` |
-| `svelte` | `useScope`, `scopedEffect`, `asyncStore`, `useLatest`, `eventStream`, `useWorker` |
-| `angular` | `injectScope`, `scopedEffect`, `injectAsync`, `injectLatest`, `injectEventStream`, `injectWorker` |
+| `react` | `NurseryProvider`, `useNursery`, `useNurseryEffect`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
+| `vue` | `useNursery`, `useNurseryWatch`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
+| `solid` | `createNursery`, `nurseryEffect`, `createAsync`, `createLatest`, `createEventStream`, `createWorker` |
+| `svelte` | `useNursery`, `nurseryEffect`, `asyncStore`, `useLatest`, `eventStream`, `useWorker` |
+| `angular` | `injectNursery`, `nurseryEffect`, `injectAsync`, `injectLatest`, `injectEventStream`, `injectWorker` |
 
-## Scope
+## Nursery
 
 ```ts
-import { Scope, contextKey } from '@scopekit/core';
+import { Nursery, contextKey } from '@nursery/core';
 
 const TraceId = contextKey<string>('traceId');
 
 // вариант 1: await using (TS 5.2+, esbuild/babel транспилируют)
 {
-  await using scope = new Scope({ timeout: 5000, ctx: [TraceId.with('t-1')] });
-  const user  = scope.spawn(sig => api.user(id, sig));
-  const posts = scope.spawn((sig, s) => api.posts(id, sig, s.get(TraceId)));
+  await using nursery = new Nursery({ timeout: 5000, ctx: [TraceId.with('t-1')] });
+  const user  = nursery.spawn(sig => api.user(id, sig));
+  const posts = nursery.spawn((sig, s) => api.posts(id, sig, s.get(TraceId)));
   render(await user, await posts);
 } // выход из блока: всё незавершённое отменено, cleanup выполнен
 
-// вариант 2: Scope.run
-const total = await Scope.run(async scope => {
-  const a = scope.spawn(sig => fetchA(sig));
-  const b = scope.spawn(sig => fetchB(sig));
+// вариант 2: Nursery.run
+const total = await Nursery.run(async nursery => {
+  const a = nursery.spawn(sig => fetchA(sig));
+  const b = nursery.spawn(sig => fetchB(sig));
   return (await a) + (await b);
 });
 ```
 
 Семантика:
 
-- `spawn(task)` вызывает `task(signal, scope)`. Первая не-abort ошибка ребёнка отменяет остальных
-  с `AbortError`, у которого `cause` равен исходной ошибке. Ошибка лежит в `scope.error`.
+- `spawn(task)` вызывает `task(signal, nursery)`. Первая не-abort ошибка ребёнка отменяет остальных
+  с `AbortError`, у которого `cause` равен исходной ошибке. Ошибка лежит в `nursery.error`.
 - Не дождавшийся ребёнок с ошибкой не создаёт `unhandledrejection`.
 - `close()` идемпотентен: отменяет живых детей, ждёт их, запускает `defer` в обратном порядке,
   отвязывается от родительского сигнала.
 - `child()` наследует сигнал и контекст, но не отменяет родителя. Родитель при закрытии ждёт детей.
-- Контекст типизирован: `contextKey<T>(name, default?)`, `key.with(value)`, `scope.get(key)`,
-  `scope.has(key)`. Это явная замена AsyncContext, пока его нет в платформе.
+- Контекст типизирован: `contextKey<T>(name, default?)`, `key.with(value)`, `nursery.get(key)`,
+  `nursery.has(key)`. Это явная замена AsyncContext, пока его нет в платформе.
 
 ## Комбинаторы
 
 ```ts
-await withTimeout(sig => fetch(url, { signal: sig }), 3000, scope.signal);
+await withTimeout(sig => fetch(url, { signal: sig }), 3000, nursery.signal);
 
 await retry(sig => fetch(url, { signal: sig }), {
   retries: 3, delay: 200, factor: 2, jitter: 0.2,
   attemptTimeout: 5000,                       // зависшая попытка считается ошибкой и ретраится
   retryOn: err => (isRateLimited(err) ? 60_000 : !isFatal(err)),  // число = задержка в мс
-  signal: scope.signal,
+  signal: nursery.signal,
 });
 
 const first = await race([sig => fromCache(sig), sig => fromNetwork(sig)]); // проигравший отменён
@@ -101,14 +101,14 @@ const first = await race([sig => fromCache(sig), sig => fromNetwork(sig)]); // �
 
 ```ts
 const sem = new Semaphore(4);
-await sem.run(sig => upload(file, sig), scope.signal);
+await sem.run(sig => upload(file, sig), nursery.signal);
 
 // map: порядок сохранён, при первой ошибке остальные отменяются и не стартуют
-const results = await map(urls, (u, _i, sig) => fetchJson(u, sig), { concurrency: 3, signal: scope.signal });
+const results = await map(urls, (u, _i, sig) => fetchJson(u, sig), { concurrency: 3, signal: nursery.signal });
 // mapSettled: всё выполняется до конца, PromiseSettledResult[] в порядке входа
 // источник может быть Iterable или AsyncIterable
 
-const queue = new Queue({ concurrency: 2, signal: scope.signal });
+const queue = new Queue({ concurrency: 2, signal: nursery.signal });
 queue.add(sig => process(job, sig));
 await queue.idle();
 ```
@@ -127,7 +127,7 @@ loadUser(1); loadUser(1); // один запрос, два ожидающих
 ## События и потоки
 
 ```ts
-import { on, Channel, iter } from '@scopekit/core';
+import { on, Channel, iter } from '@nursery/core';
 
 for await (const e of iter.pipe(on<InputEvent>(input, 'input', { signal }), iter.debounce(300))) {
   search((e.target as HTMLInputElement).value);
@@ -161,7 +161,7 @@ const http = createHttp({
   headers: { authorization: `Bearer ${token}` },
 });
 
-const user = await http.get<User>('/users/1', { signal: scope.signal, query: { expand: 'posts' } });
+const user = await http.get<User>('/users/1', { signal: nursery.signal, query: { expand: 'posts' } });
 await http.post('/users', { signal, body: { name } });   // объект → JSON; FormData как есть
 // signal обязателен, без него TypeError; ошибка статуса — HttpError { status, body, response }
 // одинаковые параллельные GET делят один fetch; отмена одного подписчика не гасит общий запрос
@@ -171,45 +171,45 @@ await http.post('/users', { signal, body: { name } });   // объект → JSO
 
 ```ts
 // worker.ts
-import { expose } from '@scopekit/core';
+import { expose } from '@nursery/core';
 expose({
   async parse(src: string, { signal }: { signal: AbortSignal }) { /* signal живой */ },
 });
 
 // main.ts
-import { wrap } from '@scopekit/core';
+import { wrap } from '@nursery/core';
 const parser = wrap<typeof import('./worker.js')['api']>(new Worker('./worker.js', { type: 'module' }));
-const ast = await parser.parse(src, { signal: scope.signal }); // abort доходит до воркера
+const ast = await parser.parse(src, { signal: nursery.signal }); // abort доходит до воркера
 parser[Symbol.dispose]();
 ```
 
 ## Фреймворки
 
 ```ts
-import { useAsync, useLatest, useEventStream } from '@scopekit/react';
+import { useAsync, useLatest, useEventStream } from '@nursery/react';
 
-const orders = useAsync(scope => http.get<Order[]>('/orders', { scope }), [userId]);
+const orders = useAsync(nursery => http.get<Order[]>('/orders', { nursery }), [userId]);
 const { run: search, pending } = useLatest((q: string, sig) => http.get<Item[]>('/search', { signal: sig, query: { q } }));
 useEventStream<KeyboardEvent>(window, 'keydown', e => { if (e.key === 'Escape') close(); });
 ```
 
 ```ts
-import { useAsync, useLatest } from '@scopekit/vue';
-const { data, loading } = useAsync(scope => http.get<User>(`/users/${props.id}`, { scope }));
+import { useAsync, useLatest } from '@nursery/vue';
+const { data, loading } = useAsync(nursery => http.get<User>(`/users/${props.id}`, { nursery }));
 ```
 
-Те же примитивы есть для Solid (`@scopekit/solid`), Svelte 5 (`@scopekit/svelte`) и Angular
-(`@scopekit/angular`). Все адаптеры это optional peer dependencies.
+Те же примитивы есть для Solid (`@nursery/solid`), Svelte 5 (`@nursery/svelte`) и Angular
+(`@nursery/angular`). Все адаптеры это optional peer dependencies.
 
 ## Тесты
 
 ```ts
-import { fakeFetch, mockWorker, expectAborted, fakeClock } from '@scopekit/core/testing';
+import { fakeFetch, mockWorker, expectAborted, fakeClock } from '@nursery/core/testing';
 
 const f = fakeFetch({ 'GET /users/:id': ({ params }) => ({ id: params.id }) });
 const http = createHttp({ fetch: f.fetch });
 const remote = wrap<typeof api>(mockWorker(api));      // воркер без Worker
-await expectAborted(scope.spawn(sig => sleep(1000, sig)));
+await expectAborted(nursery.spawn(sig => sleep(1000, sig)));
 ```
 
 ## Разработка

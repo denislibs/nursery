@@ -1,20 +1,20 @@
 import { createRoot, createSignal } from 'solid-js';
 import {
-  createScope,
-  scopedEffect,
+  createNursery,
+  nurseryEffect,
   createAsync,
   createLatest,
   createEventStream,
   createWorker,
 } from '../src/index.js';
-import { sleep, isAbort } from '@scopekit/core/signal';
+import { sleep, isAbort } from '@nursery/core/signal';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
 describe('solid adapter', () => {
-  test('createScope closes on root disposal', () => {
+  test('createNursery closes on root disposal', () => {
     let signal!: AbortSignal;
     const dispose = createRoot(d => {
-      signal = createScope().signal;
+      signal = createNursery().signal;
       return d;
     });
     expect(signal.aborted).toBe(false);
@@ -22,13 +22,13 @@ describe('solid adapter', () => {
     expect(signal.aborted).toBe(true);
   });
 
-  test('scopedEffect re-runs with a fresh scope when a signal changes', async () => {
+  test('nurseryEffect re-runs with a fresh nursery when a signal changes', async () => {
     const [id, setId] = createSignal(1);
     const signals: AbortSignal[] = [];
     const dispose = createRoot(d => {
-      scopedEffect(scope => {
+      nurseryEffect(nursery => {
         void id();
-        signals.push(scope.signal);
+        signals.push(nursery.signal);
       });
       return d;
     });
@@ -46,9 +46,9 @@ describe('solid adapter', () => {
     const [id, setId] = createSignal(1);
     let state!: ReturnType<typeof createAsync<string>>;
     const dispose = createRoot(d => {
-      state = createAsync(async scope => {
+      state = createAsync(async nursery => {
         const cur = id();
-        await sleep(cur === 1 ? 50 : 5, scope.signal);
+        await sleep(cur === 1 ? 50 : 5, nursery.signal);
         return `user-${cur}`;
       });
       return d;

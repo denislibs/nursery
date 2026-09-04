@@ -1,20 +1,20 @@
-# Тестирование кода на scopekit
+# Тестирование кода на nursery
 
 Библиотека проектировалась так, чтобы код на ней тестировался без моков сети и без
 реального времени. Примеры на vitest, для jest отличия косметические.
 
 ```ts
-import { retry, withTimeout } from '@scopekit/core/combine';
-import { sleep, isAbort } from '@scopekit/core/signal';
-import { Scope } from '@scopekit/core/scope';
-import { latest } from '@scopekit/core/latest';
-import { createHttp } from '@scopekit/core/http';
-import { expose, wrap } from '@scopekit/core/worker';
+import { retry, withTimeout } from '@nursery/core/combine';
+import { sleep, isAbort } from '@nursery/core/signal';
+import { Nursery } from '@nursery/core/nursery';
+import { latest } from '@nursery/core/latest';
+import { createHttp } from '@nursery/core/http';
+import { expose, wrap } from '@nursery/core/worker';
 ```
 
 ## Фейковые таймеры
 
-`sleep`, `retry`, `withTimeout`, `debounce`, `throttle`, `Scope({ timeout })` работают на
+`sleep`, `retry`, `withTimeout`, `debounce`, `throttle`, `Nursery({ timeout })` работают на
 `setTimeout`, поэтому `vi.useFakeTimers()` делает их мгновенными и детерминированными.
 
 ```ts
@@ -67,7 +67,7 @@ await expect(p2).rejects.toSatisfy(isAbort);
 Тест на «unmount отменяет запрос» пишется через сигнал, который дошёл до `fetch`:
 
 ```ts
-test('закрытие скоупа отменяет запрос', async () => {
+test('закрытие nursery отменяет запрос', async () => {
   let seen: AbortSignal | undefined;
   const http = createHttp({
     fetch: (_u, init) => new Promise((_r, rej) => {
@@ -75,9 +75,9 @@ test('закрытие скоупа отменяет запрос', async () => 
       seen.addEventListener('abort', () => rej(seen!.reason));
     }),
   });
-  const scope = new Scope();
-  const p = scope.spawn(sig => http.get('/x', { signal: sig }));
-  await scope.close();
+  const nursery = new Nursery();
+  const p = nursery.spawn(sig => http.get('/x', { signal: sig }));
+  await nursery.close();
   await expect(p).rejects.toSatisfy(isAbort);
   expect(seen!.aborted).toBe(true);
 });
@@ -88,9 +88,9 @@ test('закрытие скоупа отменяет запрос', async () => 
 ```ts
 test('ошибка одного отменяет остальных', async () => {
   let siblingAborted = false;
-  await expect(Scope.run(async scope => {
-    scope.spawn(async () => { throw new Error('boom'); });
-    await scope.spawn(sig => sleep(1000, sig).catch(e => { siblingAborted = isAbort(e); throw e; }));
+  await expect(Nursery.run(async nursery => {
+    nursery.spawn(async () => { throw new Error('boom'); });
+    await nursery.spawn(sig => sleep(1000, sig).catch(e => { siblingAborted = isAbort(e); throw e; }));
   })).rejects.toThrow('boom');
   expect(siblingAborted).toBe(true);
 });
@@ -155,13 +155,13 @@ try {
 
 ## Компоненты React
 
-Скоуп внутри `useScopedEffect` закрывается при unmount, поэтому Testing Library не оставит
+Nursery внутри `useNurseryEffect` закрывается при unmount, поэтому Testing Library не оставит
 висящих запросов:
 
 ```tsx
 // skip-check
 import { render, screen } from '@testing-library/react';
-import { jsonResponse } from '@scopekit/core/testing';
+import { jsonResponse } from '@nursery/core/testing';
 
 const http = createHttp({ fetch: async () => jsonResponse({ name: 'Ann' }) });
 render(<UserCard id="1" />);
@@ -177,13 +177,13 @@ Node эмулирует `AbortSignal`, `DOMException`, `Response`, `MessageChann
 не DOM и не `scheduler.yield`. Для них vitest browser mode с Playwright, конфиг в
 `vitest.config.ts` этого репозитория: тот же набор тестов гоняется и в Node, и в Chromium.
 
-## scopekit/testing
+## nursery/testing
 
 Хелперы, которые иначе приходится писать в каждом проекте:
 
 ```ts
-import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from '@scopekit/core/testing';
-import { createPool } from '@scopekit/core/worker';
+import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from '@nursery/core/testing';
+import { createPool } from '@nursery/core/worker';
 
 const f = fakeFetch({
   'GET /users/:id': ({ params }) => ({ id: params.id }),               // объект → JSON 200

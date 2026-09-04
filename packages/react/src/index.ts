@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** React adapters. Import from 'scopekit/react'; requires react >= 18. */
+/** React adapters. Import from 'nursery/react'; requires react >= 18. */
 import {
   createContext,
   createElement,
@@ -12,34 +12,35 @@ import {
   type DependencyList,
   type ReactNode,
 } from 'react';
-import { Scope, type ScopeOptions } from '@scopekit/core/scope';
-import { latest, type LatestFn } from '@scopekit/core/latest';
-import { isAbort } from '@scopekit/core/signal';
-import { on, type OnOptions } from '@scopekit/core/events';
-import { wrap, type Remote } from '@scopekit/core/worker';
+import { Nursery, type NurseryOptions } from '@nursery/core/nursery';
+import { latest, type LatestFn } from '@nursery/core/latest';
+import { isAbort } from '@nursery/core/signal';
+import { on, type OnOptions } from '@nursery/core/events';
+import { wrap, type Remote } from '@nursery/core/worker';
 
-export const ScopeContext = createContext<Scope | null>(null);
+export const NurseryContext = createContext<Nursery | null>(null);
 
-/** Makes `scope` the parent of every scope created by the hooks below. */
-export function ScopeProvider({ scope, children }: { scope: Scope; children?: ReactNode }) {
-  return createElement(ScopeContext.Provider, { value: scope }, children);
+/** Makes `nursery` the parent of every nursery created by the hooks below. */
+export function NurseryProvider({ nursery, children }: { nursery: Nursery; children?: ReactNode }) {
+  return createElement(NurseryContext.Provider, { value: nursery }, children);
 }
 
-const make = (parent: Scope | null, opts?: ScopeOptions) => (parent ? parent.child(opts) : new Scope(opts));
+const make = (parent: Nursery | null, opts?: NurseryOptions) =>
+  parent ? parent.child(opts) : new Nursery(opts);
 
 /**
- * A scope that lives as long as the component is mounted. Child of the nearest ScopeProvider.
- * The scope is created during render as a detached child and adopted by the parent in the
+ * A nursery that lives as long as the component is mounted. Child of the nearest NurseryProvider.
+ * The nursery is created during render as a detached child and adopted by the parent in the
  * effect, so a render that React discards (StrictMode, Suspense) never pollutes
- * `parent.children`. Under StrictMode the first scope is closed and replaced on the remount.
+ * `parent.children`. Under StrictMode the first nursery is closed and replaced on the remount.
  */
-export function useScope(opts?: ScopeOptions): Scope {
-  const parent = useContext(ScopeContext);
+export function useNursery(opts?: NurseryOptions): Nursery {
+  const parent = useContext(NurseryContext);
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const create = () =>
-    parent ? parent.child(optsRef.current, { detached: true }) : new Scope(optsRef.current);
-  const ref = useRef<Scope | null>(null);
+    parent ? parent.child(optsRef.current, { detached: true }) : new Nursery(optsRef.current);
+  const ref = useRef<Nursery | null>(null);
   ref.current ??= create();
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
@@ -58,22 +59,22 @@ export function useScope(opts?: ScopeOptions): Scope {
 }
 
 /**
- * useEffect with a Scope. Each run gets a fresh scope; the previous one is closed on cleanup,
- * so work from a stale run is cancelled. Failures are reported through Scope.onUnhandled.
+ * useEffect with a Nursery. Each run gets a fresh nursery; the previous one is closed on cleanup,
+ * so work from a stale run is cancelled. Failures are reported through Nursery.onUnhandled.
  */
-export function useScopedEffect(
-  effect: (scope: Scope) => void | Promise<void>,
+export function useNurseryEffect(
+  effect: (nursery: Nursery) => void | Promise<void>,
   deps: DependencyList,
-  opts?: ScopeOptions,
+  opts?: NurseryOptions,
 ): void {
-  const parent = useContext(ScopeContext);
+  const parent = useContext(NurseryContext);
   const effectRef = useRef(effect);
   effectRef.current = effect;
   useEffect(() => {
-    const scope = make(parent, opts);
-    void scope.spawn((_sig, s) => Promise.resolve(effectRef.current(s)), { name: 'effect' });
+    const nursery = make(parent, opts);
+    void nursery.spawn((_sig, s) => Promise.resolve(effectRef.current(s)), { name: 'effect' });
     return () => {
-      void scope.close();
+      void nursery.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parent, ...deps]);
@@ -86,17 +87,17 @@ export type AsyncState<T> =
 
 /** Loads data in a scoped effect. Results of a cancelled run never reach state. */
 export function useAsync<T>(
-  fn: (scope: Scope) => Promise<T>,
+  fn: (nursery: Nursery) => Promise<T>,
   deps: DependencyList,
-  opts?: ScopeOptions,
+  opts?: NurseryOptions,
 ): AsyncState<T> {
   const [state, setState] = useState<AsyncState<T>>({ status: 'loading' });
-  useScopedEffect(
-    async scope => {
+  useNurseryEffect(
+    async nursery => {
       setState(s => (s.status === 'loading' ? s : { status: 'loading' }));
       try {
-        const data = await fn(scope);
-        if (!scope.signal.aborted) setState({ status: 'success', data });
+        const data = await fn(nursery);
+        if (!nursery.signal.aborted) setState({ status: 'success', data });
       } catch (error) {
         if (!isAbort(error)) setState({ status: 'error', error });
       }
@@ -142,17 +143,17 @@ export function useLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>)
 export function useEventStream<E extends Event = Event>(
   target: EventTarget | null | undefined,
   type: string,
-  handler: (event: E, scope: Scope) => void | Promise<void>,
+  handler: (event: E, nursery: Nursery) => void | Promise<void>,
   deps: DependencyList = [],
   opts?: Omit<OnOptions, 'signal'>,
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  useScopedEffect(
-    async scope => {
+  useNurseryEffect(
+    async nursery => {
       if (!target) return;
-      for await (const e of on<E>(target, type, { ...opts, signal: scope.signal })) {
-        await handlerRef.current(e, scope);
+      for await (const e of on<E>(target, type, { ...opts, signal: nursery.signal })) {
+        await handlerRef.current(e, nursery);
       }
     },
     [target, type, ...deps],

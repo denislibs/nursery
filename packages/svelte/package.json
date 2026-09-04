@@ -1,22 +1,22 @@
 {
-  "name": "@scopekit/svelte",
+  "name": "@nursery/svelte",
   "version": "1.0.0-rc.1",
-  "description": "Svelte 5 helpers for @scopekit/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
+  "description": "Svelte 5 helpers for @nursery/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
   "keywords": [
     "abortsignal",
     "cancellation",
-    "scopekit",
+    "nursery",
     "structured-concurrency",
     "svelte"
   ],
-  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "homepage": "https://github.com/denislibs/nursery#readme",
   "bugs": {
-    "url": "https://github.com/denislibs/scopekit/issues"
+    "url": "https://github.com/denislibs/nursery/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/denislibs/scopekit.git",
+    "url": "git+https://github.com/denislibs/nursery.git",
     "directory": "packages/svelte"
   },
   "files": [
@@ -40,7 +40,7 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "@scopekit/core": "^1.0.0-rc.1",
+    "@nursery/core": "^1.0.0-rc.1",
     "svelte": ">=5"
   },
   "engines": {

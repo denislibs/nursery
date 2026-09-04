@@ -1,14 +1,14 @@
 # Наблюдаемость: имена, дамп, зависшие задачи, необработанные ошибки
 
 ```ts
-import { Scope } from '@scopekit/core/scope';
-import { timeoutError } from '@scopekit/core/signal';
+import { Nursery } from '@nursery/core/nursery';
+import { timeoutError } from '@nursery/core/signal';
 ```
 
 ## Имена задач и дамп дерева
 
 ```ts
-const page = new Scope({ name: 'orders-page' });
+const page = new Nursery({ name: 'orders-page' });
 page.spawn(sig => pollStatus(sig), { name: 'poll' });
 const widget = page.child({ name: 'chart' });
 widget.spawn(sig => stream(sig), { name: 'ws' });
@@ -20,23 +20,23 @@ console.log(page.dump());
 //     - ws 1198ms
 ```
 
-`scope.tasks`, `scope.children` и `scope.inspect()` дают то же в виде объектов. Повесьте
-`window.__scopes = rootScope` в dev-сборке, и «кто держит страницу» находится за секунду.
+`nursery.tasks`, `nursery.children` и `nursery.inspect()` дают то же в виде объектов. Повесьте
+`window.__nurseries = rootNursery` в dev-сборке, и «кто держит страницу» находится за секунду.
 
 ## Необработанные ошибки
 
 Задача, которую никто не `await`, при ошибке не создаёт `unhandledrejection`. Она уходит
-в `Scope.onUnhandled`:
+в `Nursery.onUnhandled`:
 
 ```ts
-Scope.onUnhandled((error, { scope, task }) => {
-  Sentry.captureException(error, { tags: { scope: scope.name, task: task?.name } });
+Nursery.onUnhandled((error, { nursery, task }) => {
+  Sentry.captureException(error, { tags: { nursery: nursery.name, task: task?.name } });
 });
 ```
 
 Без подписчиков ошибка печатается в `console.error`. Не считаются необработанными:
 отмены, ошибки, которые вызывающий дождался или поймал через `catch` в течение одной
-макрозадачи, и первая ошибка, которую пробрасывает `Scope.run`.
+макрозадачи, и первая ошибка, которую пробрасывает `Nursery.run`.
 
 ## Зависшие задачи
 
@@ -44,47 +44,47 @@ Scope.onUnhandled((error, { scope, task }) => {
 ограничивает ожидание:
 
 ```ts
-await using scope = new Scope({ name: 'modal', grace: 5000 });
-// или разово: await scope.close({ grace: 5000 })
+await using nursery = new Nursery({ name: 'modal', grace: 5000 });
+// или разово: await nursery.close({ grace: 5000 })
 ```
 
-Через 5 секунд `close()` завершится, cleanup выполнится, а в `Scope.onUnhandled` придёт
-`ScopeStuckError` со списком задач, их именами и временем жизни. Grace наследуется дочерними
-скоупами. Это диагностика, а не лечение: задача должна принимать сигнал.
+Через 5 секунд `close()` завершится, cleanup выполнится, а в `Nursery.onUnhandled` придёт
+`NurseryStuckError` со списком задач, их именами и временем жизни. Grace наследуется дочерними
+nursery. Это диагностика, а не лечение: задача должна принимать сигнал.
 
 ## Дедлайн
 
 ```ts
-const scope = new Scope({ timeout: 10_000 });
-scope.deadline;      // performance.now() + 10000
-scope.remaining();   // сколько осталось
-const child = scope.child({ timeout: 60_000 });   // дедлайн ребёнка = дедлайн родителя
+const nursery = new Nursery({ timeout: 10_000 });
+nursery.deadline;      // performance.now() + 10000
+nursery.remaining();   // сколько осталось
+const child = nursery.child({ timeout: 60_000 });   // дедлайн ребёнка = дедлайн родителя
 ```
 
-`http` читает дедлайн из опции `scope`, свои функции могут делать так же:
+`http` читает дедлайн из опции `nursery`, свои функции могут делать так же:
 
 ```ts
-async function withBudget(scope: Scope) {
-  if (scope.remaining() < 500) throw timeoutError('Not enough time budget');
+async function withBudget(nursery: Nursery) {
+  if (nursery.remaining() < 500) throw timeoutError('Not enough time budget');
 }
 ```
 
-## Scope.current() и профилирование
+## Nursery.current() и профилирование
 
 ```ts
-await scope.spawn(async () => {
-  Scope.current();          // == scope в синхронной части задачи
+await nursery.spawn(async () => {
+  Nursery.current();          // == nursery в синхронной части задачи
   await something();
-  Scope.current();          // undefined без AsyncContext, scope там, где он есть
+  Nursery.current();          // undefined без AsyncContext, nursery там, где он есть
 });
-scope.enter(() => Scope.current());   // явный вход
+nursery.enter(() => Nursery.current());   // явный вход
 ```
 
-Правило: пробрасывайте скоуп аргументом, а `Scope.current()` используйте для диагностики и в
+Правило: пробрасывайте nursery аргументом, а `Nursery.current()` используйте для диагностики и в
 местах, где аргумент физически не пробросить.
 
 ```ts
-Scope.profiling = true;   // в dev
-// Performance-панель DevTools: measure 'scopekit:page/loadUser' с detail { scope, task, status }
-// и 'scopekit:page' на время жизни скоупа
+Nursery.profiling = true;   // в dev
+// Performance-панель DevTools: measure 'nursery:page/loadUser' с detail { nursery, task, status }
+// и 'nursery:page' на время жизни nursery
 ```

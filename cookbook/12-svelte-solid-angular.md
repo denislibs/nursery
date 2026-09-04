@@ -1,27 +1,27 @@
 # Svelte, SolidJS, Angular, Web Components
 
-Адаптеры поставляются как `@scopekit/svelte`, `@scopekit/solid` и `@scopekit/angular`.
-Во всех подход один: скоуп создаётся, когда компонент или эффект стартует, и закрывается в
+Адаптеры поставляются как `@nursery/svelte`, `@nursery/solid` и `@nursery/angular`.
+Во всех подход один: nursery создаётся, когда компонент или эффект стартует, и закрывается в
 cleanup.
 
-Svelte 5: руны это компилятор, поэтому перезапуск остаётся в вашем `$effect`, а `scopedEffect`
+Svelte 5: руны это компилятор, поэтому перезапуск остаётся в вашем `$effect`, а `nurseryEffect`
 и `eventStream` возвращают cleanup:
 
 ```svelte
 <script lang="ts">
   let { id } = $props();
   let user = $state(null);
-  $effect(() => scopedEffect(async scope => { user = await http.get(`/users/${id}`, { scope }); }));
+  $effect(() => nurseryEffect(async nursery => { user = await http.get(`/users/${id}`, { nursery }); }));
   $effect(() => eventStream(button, 'click', onClick));
 </script>
 ```
 
 Для состояния загрузки есть `asyncStore`: обычный Svelte-store со статусом, `refresh()` для
-перезапуска из `$effect` и `scope`, привязанный к компоненту:
+перезапуска из `$effect` и `nursery`, привязанный к компоненту:
 
 ```svelte
 <script lang="ts">
-  const user = asyncStore(scope => http.get(`/users/${id}`, { scope }));
+  const user = asyncStore(nursery => http.get(`/users/${id}`, { nursery }));
   $effect(() => { void id; user.refresh(); });
 </script>
 {#if $user.status === 'success'}{$user.data.name}{/if}
@@ -30,31 +30,31 @@ Svelte 5: руны это компилятор, поэтому перезапу�
 ## Svelte 5 (runes)
 
 ```ts
-import { useScope, scopedEffect, asyncStore, useLatest, eventStream, useWorker } from '@scopekit/svelte';
+import { useNursery, nurseryEffect, asyncStore, useLatest, eventStream, useWorker } from '@nursery/svelte';
 ```
 
 
 ```svelte
 <script lang="ts">
-  import { scopedEffect } from '$lib/scope.svelte';
+  import { nurseryEffect } from '$lib/nursery.svelte';
   let { id }: { id: string } = $props();
   let user = $state<User | null>(null);
 
-  scopedEffect(async scope => {
+  nurseryEffect(async nursery => {
     const current = id;                 // читаем синхронно: это зависимость эффекта
-    user = await http.get<User>(`/users/${current}`, { signal: scope.signal });
+    user = await http.get<User>(`/users/${current}`, { signal: nursery.signal });
   });
 </script>
 ```
 
 Как и во Vue, зависимости собираются из синхронной части. Смена `id` перезапускает эффект,
-предыдущий скоуп закрывается, старый запрос отменяется.
+предыдущий nursery закрывается, старый запрос отменяется.
 
 Поиск:
 
 ```svelte
 <script lang="ts">
-  import { latest } from '@scopekit/core/latest';
+  import { latest } from '@nursery/core/latest';
   let query = $state('');
   let results = $state<Item[]>([]);
   const search = latest((q: string, signal) => http.get<Item[]>('/search', { signal, query: { q } }));
@@ -68,25 +68,25 @@ import { useScope, scopedEffect, asyncStore, useLatest, eventStream, useWorker }
 ```
 
 Svelte 4 со сторами: та же логика в `onMount`, возвращающем cleanup, и
-`onDestroy(() => scope.close())`.
+`onDestroy(() => nursery.close())`.
 
 ## SolidJS
 
 ```ts
-import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from '@scopekit/solid';
+import { createNursery, nurseryEffect, createAsync, createLatest, createEventStream, createWorker } from '@nursery/solid';
 import { createSignal, createResource, onCleanup } from 'solid-js';
-import { latest } from '@scopekit/core/latest';
-import { on } from '@scopekit/core/events';
+import { latest } from '@nursery/core/latest';
+import { on } from '@nursery/core/events';
 ```
 
 
 `createResource` сам передаёт сигнал не везде, но даёт `refetching`; проще всего строить
-ресурс поверх `Scope.run`:
+ресурс поверх `Nursery.run`:
 
 ```ts
 const [id, setId] = createSignal('1');
 const [user] = createResource(id, id =>
-  Scope.run(scope => http.get<User>(`/users/${id}`, { signal: scope.signal }), { timeout: 10_000 }),
+  Nursery.run(nursery => http.get<User>(`/users/${id}`, { signal: nursery.signal }), { timeout: 10_000 }),
 );
 ```
 
@@ -101,8 +101,8 @@ onCleanup(() => load.cancel());
 События:
 
 ```ts
-scopedEffect(async scope => {
-  for await (const e of on<KeyboardEvent>(window, 'keydown', { signal: scope.signal })) {
+nurseryEffect(async nursery => {
+  for await (const e of on<KeyboardEvent>(window, 'keydown', { signal: nursery.signal })) {
     if (e.key === 'Escape') setOpen(false);
   }
 });
@@ -111,11 +111,11 @@ scopedEffect(async scope => {
 ## Angular
 
 ```ts
-import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '@scopekit/angular';
+import { injectNursery, nurseryEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '@nursery/angular';
 import { Component, Injectable, effect, input, signal } from '@angular/core';
-import { latest } from '@scopekit/core/latest';
-import { on } from '@scopekit/core/events';
-import { isAbort } from '@scopekit/core/signal';
+import { latest } from '@nursery/core/latest';
+import { on } from '@nursery/core/events';
+import { isAbort } from '@nursery/core/signal';
 ```
 
 `DestroyRef` даёт хук на уничтожение, `inject` работает в конструкторе и полях.
@@ -124,13 +124,13 @@ import { isAbort } from '@scopekit/core/signal';
 ```ts
 @Component({ /* ... */ })
 export class UserCardComponent {
-  private scope = injectScope();
+  private nursery = injectNursery();
   user = signal<User | null>(null);
   id = input.required<string>();
 
   constructor() {
     effect(onCleanup => {
-      const child = this.scope.child();
+      const child = this.nursery.child();
       onCleanup(() => void child.close());
       const id = this.id();
       child.spawn(async sig => this.user.set(await http.get<User>(`/users/${id}`, { signal: sig })));
@@ -139,17 +139,17 @@ export class UserCardComponent {
 }
 ```
 
-Сервис с корневым скоупом:
+Сервис с корневым nursery:
 
 ```ts
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
-  private scope = new Scope();
+  private nursery = new Nursery();
   private reload = latest((_: void, signal) => http.get<Item[]>('/items', { signal }));
   items = signal<Item[]>([]);
 
   async refresh() {
-    this.items.set(await this.reload(undefined, this.scope.signal));
+    this.items.set(await this.reload(undefined, this.nursery.signal));
   }
 }
 ```
@@ -180,30 +180,30 @@ const keys$ = fromAsyncIterable(sig => on<KeyboardEvent>(window, 'keydown', { si
 ## Web Components / vanilla
 
 ```ts
-import { Scope } from '@scopekit/core/scope';
-import { on } from '@scopekit/core/events';
-import { pipe, throttle } from '@scopekit/core/iter';
+import { Nursery } from '@nursery/core/nursery';
+import { on } from '@nursery/core/events';
+import { pipe, throttle } from '@nursery/core/iter';
 ```
 
 ```ts
 class LiveChart extends HTMLElement {
-  #scope?: Scope;
+  #nursery?: Nursery;
 
   connectedCallback() {
-    const scope = (this.#scope = new Scope());
-    scope.spawn(async sig => {
+    const nursery = (this.#nursery = new Nursery());
+    nursery.spawn(async sig => {
       for await (const tick of pipe(on<MessageEvent>(ws, 'message', { signal: sig }), throttle(100))) {
         this.draw(JSON.parse(tick.data));
       }
     });
-    scope.spawn(async sig => {
+    nursery.spawn(async sig => {
       const history = await http.get<Point[]>('/history', { signal: sig });
       this.draw(history);
     });
   }
 
   disconnectedCallback() {
-    void this.#scope?.close();
+    void this.#nursery?.close();
   }
 
   draw(points: unknown) {
@@ -213,11 +213,11 @@ class LiveChart extends HTMLElement {
 ```
 
 Без фреймворка тоже нет флагов и ручного `removeEventListener`: `disconnectedCallback`
-закрывает скоуп, скоуп закрывает всё остальное.
+закрывает nursery, nursery закрывает всё остальное.
 
 ## Общая таблица
 
-| Фреймворк | Где создать скоуп | Где закрыть |
+| Фреймворк | Где создать nursery | Где закрыть |
 |---|---|---|
 | React | `useEffect` | cleanup эффекта |
 | Vue | `watchEffect` / setup | `onCleanup` / `onScopeDispose` |

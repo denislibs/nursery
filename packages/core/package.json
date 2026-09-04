@@ -1,5 +1,5 @@
 {
-  "name": "@scopekit/core",
+  "name": "@nursery/core",
   "version": "1.0.0-rc.1",
   "description": "Structured concurrency, cancellation and async utilities for the browser, built on AbortSignal, Promise and AsyncIterable.",
   "keywords": [
@@ -13,14 +13,14 @@
     "structured-concurrency",
     "worker"
   ],
-  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "homepage": "https://github.com/denislibs/nursery#readme",
   "bugs": {
-    "url": "https://github.com/denislibs/scopekit/issues"
+    "url": "https://github.com/denislibs/nursery/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/denislibs/scopekit.git",
+    "url": "git+https://github.com/denislibs/nursery.git",
     "directory": "packages/core"
   },
   "files": [
@@ -57,9 +57,9 @@
       "types": "./dist/latest.d.ts",
       "import": "./dist/latest.js"
     },
-    "./scope": {
-      "types": "./dist/scope.d.ts",
-      "import": "./dist/scope.js"
+    "./nursery": {
+      "types": "./dist/nursery.d.ts",
+      "import": "./dist/nursery.js"
     },
     "./events": {
       "types": "./dist/events.d.ts",
@@ -88,7 +88,7 @@
     "./package.json": "./package.json",
     "./bundle": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/scopekit.min.js"
+      "import": "./dist/nursery.min.js"
     }
   },
   "scripts": {

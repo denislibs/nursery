@@ -2,16 +2,16 @@ import { createElement, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import {
-  useScopedEffect,
+  useNurseryEffect,
   useAsync,
   useLatest,
   useEventStream,
   useWorker,
-  ScopeProvider,
-  useScope,
+  NurseryProvider,
+  useNursery,
 } from '../src/index.js';
-import { sleep, isAbort } from '@scopekit/core/signal';
-import { Scope, contextKey } from '@scopekit/core/scope';
+import { sleep, isAbort } from '@nursery/core/signal';
+import { Nursery, contextKey } from '@nursery/core/nursery';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
 declare global {
@@ -34,13 +34,13 @@ afterEach(async () => {
 
 const render = (node: ReactNode) => act(async () => root.render(node));
 
-describe('useScopedEffect', () => {
-  test('closes the previous scope when deps change and on unmount', async () => {
+describe('useNurseryEffect', () => {
+  test('closes the previous nursery when deps change and on unmount', async () => {
     const signals: AbortSignal[] = [];
     function C({ id }: { id: number }) {
-      useScopedEffect(
-        scope => {
-          signals.push(scope.signal);
+      useNurseryEffect(
+        nursery => {
+          signals.push(nursery.signal);
         },
         [id],
       );
@@ -62,8 +62,8 @@ describe('useAsync', () => {
     const states: string[] = [];
     function C({ id }: { id: number }) {
       const s = useAsync(
-        async scope => {
-          await sleep(id === 1 ? 50 : 5, scope.signal);
+        async nursery => {
+          await sleep(id === 1 ? 50 : 5, nursery.signal);
           return `user-${id}`;
         },
         [id],
@@ -149,27 +149,27 @@ describe('useEventStream', () => {
   });
 });
 
-describe('ScopeProvider / useScope', () => {
-  test('component scopes are children of the provider scope and inherit context', async () => {
+describe('NurseryProvider / useNursery', () => {
+  test('component nurseries are children of the provider nursery and inherit context', async () => {
     const Trace = contextKey<string>('trace');
     let seen: string | undefined;
-    let parentScope: Scope | undefined;
+    let parentNursery: Nursery | undefined;
     function C() {
-      const scope = useScope();
-      seen = scope.get(Trace);
+      const nursery = useNursery();
+      seen = nursery.get(Trace);
       return null;
     }
     function P() {
-      const [scope] = useState(() => new Scope({ name: 'page', ctx: [Trace.with('t-42')] }));
-      parentScope = scope;
-      return createElement(ScopeProvider, { scope }, createElement(C));
+      const [nursery] = useState(() => new Nursery({ name: 'page', ctx: [Trace.with('t-42')] }));
+      parentNursery = nursery;
+      return createElement(NurseryProvider, { nursery }, createElement(C));
     }
     await render(createElement(P));
     expect(seen).toBe('t-42');
-    expect(parentScope!.children).toHaveLength(1);
+    expect(parentNursery!.children).toHaveLength(1);
     await act(async () => root.unmount());
     root = createRoot(container);
-    expect(parentScope!.children).toHaveLength(0);
+    expect(parentNursery!.children).toHaveLength(0);
   });
 });
 

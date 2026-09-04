@@ -14,14 +14,14 @@ describe('workspace packages', () => {
       exports: Record<string, string | { types: string; import: string }>;
       peerDependencies?: Record<string, string>;
     };
-    expect(pkg.name).toBe(dir === 'core' ? '@scopekit/core' : `@scopekit/${dir}`);
+    expect(pkg.name).toBe(dir === 'core' ? '@nursery/core' : `@nursery/${dir}`);
     for (const [key, entry] of Object.entries(pkg.exports)) {
       if (typeof entry === 'string' || key === './bundle') continue;
       const src = entry.import.replace(/^\.\/dist\//, 'src/').replace(/\.js$/, '.ts');
       expect(existsSync(join(repo, 'packages', dir, src)), `${dir}: ${key} -> ${src}`).toBe(true);
       expect(entry.types).toBe(entry.import.replace(/\.js$/, '.d.ts'));
     }
-    if (dir !== 'core') expect(pkg.peerDependencies?.['@scopekit/core']).toBeDefined();
+    if (dir !== 'core') expect(pkg.peerDependencies?.['@nursery/core']).toBeDefined();
   });
   test('all packages share one version', () => {
     const versions = new Set(

@@ -1,22 +1,22 @@
 {
-  "name": "@scopekit/react",
+  "name": "@nursery/react",
   "version": "1.0.0-rc.1",
-  "description": "React hooks for @scopekit/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
+  "description": "React hooks for @nursery/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
   "keywords": [
     "abortsignal",
     "cancellation",
+    "nursery",
     "react",
-    "scopekit",
     "structured-concurrency"
   ],
-  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "homepage": "https://github.com/denislibs/nursery#readme",
   "bugs": {
-    "url": "https://github.com/denislibs/scopekit/issues"
+    "url": "https://github.com/denislibs/nursery/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/denislibs/scopekit.git",
+    "url": "git+https://github.com/denislibs/nursery.git",
     "directory": "packages/react"
   },
   "files": [
@@ -40,7 +40,7 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "@scopekit/core": "^1.0.0-rc.1",
+    "@nursery/core": "^1.0.0-rc.1",
     "react": ">=18"
   },
   "engines": {

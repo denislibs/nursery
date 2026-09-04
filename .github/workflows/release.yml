@@ -27,8 +27,8 @@ jobs:
           [ "refs/tags/v$v" = "$GITHUB_REF" ] || { echo "tag $GITHUB_REF != v$v"; exit 1; }
       - name: Publish core first, then adapters
         run: |
-          npm publish -w @scopekit/core --provenance --access public
-          for p in react vue solid svelte angular; do npm publish -w @scopekit/$p --provenance --access public; done
+          npm publish -w @nursery/core --provenance --access public
+          for p in react vue solid svelte angular; do npm publish -w @nursery/$p --provenance --access public; done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub release

@@ -1,7 +1,7 @@
 import { mount, unmount, flushSync } from 'svelte';
 import { get } from 'svelte/store';
 import AsyncStore from './fixtures/AsyncStore.svelte';
-import { sleep } from '@scopekit/core/signal';
+import { sleep } from '@nursery/core/signal';
 import type { asyncStore } from '../src/index.js';
 
 let target: HTMLDivElement;
@@ -33,6 +33,6 @@ describe('svelte asyncStore', () => {
     expect(target.querySelector('p')!.textContent).toBe('user-2');
     unmount(instance);
     await sleep(5);
-    expect(store.scope.closed).toBe(true);
+    expect(store.nursery.closed).toBe(true);
   });
 });

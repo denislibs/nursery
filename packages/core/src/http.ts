@@ -2,7 +2,7 @@
 import { retry, type RetryOptions } from './combine.js';
 import { abortError, anySignal, isAbort, sleep, timeoutError, timeoutSignal } from './signal.js';
 import { fromReadableStream } from './iter.js';
-import type { Scope } from './scope.js';
+import type { Nursery } from './nursery.js';
 
 export type QueryValue =
   | string
@@ -54,8 +54,10 @@ export interface HttpOptions {
   onResponse?: (res: Response, ctx: RequestHookContext) => void | Response | Promise<void | Response>;
 }
 
-/** Every request needs an owner: an explicit signal, a Scope, or both. */
-export type RequestOwner = { signal: AbortSignal; scope?: Scope } | { scope: Scope; signal?: AbortSignal };
+/** Every request needs an owner: an explicit signal, a Nursery, or both. */
+export type RequestOwner =
+  | { signal: AbortSignal; nursery?: Nursery }
+  | { nursery: Nursery; signal?: AbortSignal };
 
 export interface RequestCommon<T = unknown> extends Omit<RequestInit, 'signal' | 'body' | 'method'> {
   method?: string;
@@ -69,7 +71,7 @@ export interface RequestCommon<T = unknown> extends Omit<RequestInit, 'signal' |
   /** Streams the request body (duplex: 'half') and reports bytes sent. Chromium and Node; elsewhere reports once at the end. */
   onUploadProgress?: (sent: number, total: number) => void;
   timeout?: number;
-  /** Absolute performance.now() deadline; shortens the timeout and stops retries. Defaults to scope.deadline. */
+  /** Absolute performance.now() deadline; shortens the timeout and stops retries. Defaults to nursery.deadline. */
   deadline?: number;
   /** Retry policy for this request. Setting it enables retry even for non-idempotent methods. */
   retry?: Omit<RetryOptions, 'signal' | 'attemptTimeout'>;
@@ -277,16 +279,16 @@ export function createHttp(options: HttpOptions = {}): Http {
     });
   }
 
-  /** Resolves the owner (signal/scope/deadline) into one signal plus the effective attempt timeout. */
+  /** Resolves the owner (signal/nursery/deadline) into one signal plus the effective attempt timeout. */
   function owner(
     opts: RequestOptions | (RequestOwner & StreamOptions),
   ): { signal: AbortSignal; attemptTimeout: number | undefined } | Error {
-    const { signal: explicit, scope } = opts as { signal?: AbortSignal; scope?: Scope };
-    if (!(explicit instanceof AbortSignal) && !scope) {
-      return new TypeError('http: every request needs a `signal` or a `scope`');
+    const { signal: explicit, nursery } = opts as { signal?: AbortSignal; nursery?: Nursery };
+    if (!(explicit instanceof AbortSignal) && !nursery) {
+      return new TypeError('http: every request needs a `signal` or a `nursery`');
     }
-    const deadline = opts.deadline ?? scope?.deadline;
-    const signals = [explicit, scope?.signal];
+    const deadline = opts.deadline ?? nursery?.deadline;
+    const signals = [explicit, nursery?.signal];
     let attemptTimeout = opts.timeout ?? timeout;
     if (deadline !== undefined) {
       const remaining = deadline - performance.now();
@@ -313,12 +315,12 @@ export function createHttp(options: HttpOptions = {}): Http {
     } = opts;
     const {
       signal: _s,
-      scope: _sc,
+      nursery: _sc,
       timeout: _t,
       deadline: _d,
       parse: _p,
       ...restInit
-    } = opts as RequestOptions & { scope?: Scope };
+    } = opts as RequestOptions & { nursery?: Nursery };
     const rest = omit(restInit, [
       'method',
       'body',
@@ -393,7 +395,8 @@ export function createHttp(options: HttpOptions = {}): Http {
     const maxDelay = reconnect?.maxDelay ?? 30_000;
     const factor = reconnect?.factor ?? 2;
     const shouldReconnect = reconnect?.retryOn ?? defaultSseRetryOn;
-    const signal = (opts as { signal?: AbortSignal }).signal ?? (opts as { scope?: Scope }).scope?.signal;
+    const signal =
+      (opts as { signal?: AbortSignal }).signal ?? (opts as { nursery?: Nursery }).nursery?.signal;
     let lastEventId: string | undefined;
     let serverRetry: number | undefined;
     let wait = baseDelay;

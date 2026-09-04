@@ -1,8 +1,8 @@
 // An in-page fake backend so the playground works offline: search, a slow report, an SSE feed.
-import { fakeFetch, jsonResponse } from '@scopekit/core/testing';
-import { sleep } from '@scopekit/core/signal';
+import { fakeFetch, jsonResponse } from '@nursery/core/testing';
+import { sleep } from '@nursery/core/signal';
 
-const words = ['scope', 'signal', 'retry', 'queue', 'channel', 'worker', 'stream', 'latest', 'share', 'deadline'];
+const words = ['nursery', 'signal', 'retry', 'queue', 'channel', 'worker', 'stream', 'latest', 'share', 'deadline'];
 
 export const server = fakeFetch({
   'GET /search': async ({ url }) => {

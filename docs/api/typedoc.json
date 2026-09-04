@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "name": "scopekit",
+  "name": "nursery",
   "entryPoints": [
     "../../packages/core/src/index.ts",
     "../../packages/core/src/testing.ts",

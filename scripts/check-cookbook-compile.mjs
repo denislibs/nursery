@@ -18,11 +18,11 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repo = resolve(import.meta.dirname, '..');
-const dir = mkdtempSync(join(tmpdir(), 'scopekit-cookbook-'));
-mkdirSync(join(dir, 'node_modules', '@scopekit'), { recursive: true });
+const dir = mkdtempSync(join(tmpdir(), 'nursery-cookbook-'));
+mkdirSync(join(dir, 'node_modules', '@nursery'), { recursive: true });
 symlinkSync(join(repo, 'node_modules', '@types'), join(dir, 'node_modules', '@types'), 'dir');
 for (const p of ['core', 'react', 'vue', 'solid', 'svelte', 'angular']) {
-  symlinkSync(join(repo, 'packages', p), join(dir, 'node_modules', '@scopekit', p), 'dir');
+  symlinkSync(join(repo, 'packages', p), join(dir, 'node_modules', '@nursery', p), 'dir');
 }
 for (const dep of ['react', 'react-dom', 'vue', 'solid-js', 'svelte', '@angular', 'rxjs']) {
   try {
@@ -34,7 +34,7 @@ for (const dep of ['react', 'react-dom', 'vue', 'solid-js', 'svelte', '@angular'
 writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
 copyFileSync(join(repo, 'scripts', 'cookbook-prelude.d.ts'), join(dir, 'prelude.d.ts'));
 // worker modules the recipes import relatively
-const workerStub = `import type { Remote } from '@scopekit/core/worker';\nexport const api = { parse: async (_src: string, _o: { signal: AbortSignal }): Promise<unknown> => null, compute: async (_d: unknown, _o: { signal: AbortSignal }): Promise<unknown> => null, blur: async (_i: unknown) => ({ pixels: new Uint8ClampedArray(0) }), index: async (..._a: unknown[]) => 0, process: async (_b: ArrayBuffer, _o?: unknown) => 0, produce: async (..._a: unknown[]) => 0, run: async (..._a: unknown[]) => 0 };\nexport type Api = typeof api;\nexport type _R = Remote<Api>;\n`;
+const workerStub = `import type { Remote } from '@nursery/core/worker';\nexport const api = { parse: async (_src: string, _o: { signal: AbortSignal }): Promise<unknown> => null, compute: async (_d: unknown, _o: { signal: AbortSignal }): Promise<unknown> => null, blur: async (_i: unknown) => ({ pixels: new Uint8ClampedArray(0) }), index: async (..._a: unknown[]) => 0, process: async (_b: ArrayBuffer, _o?: unknown) => 0, produce: async (..._a: unknown[]) => 0, run: async (..._a: unknown[]) => 0 };\nexport type Api = typeof api;\nexport type _R = Remote<Api>;\n`;
 for (const f of ['parser.worker.ts', 'w.ts', 'worker.ts', 'shared.ts', 'echo.worker.ts', 'heavy.worker.ts'])
   writeFileSync(join(dir, f), workerStub);
 
@@ -128,13 +128,13 @@ writeFileSync(
       skipLibCheck: true,
       allowImportingTsExtensions: true,
       paths: {
-        '@scopekit/core': ['./node_modules/@scopekit/core/src/index.ts'],
-        '@scopekit/core/*': ['./node_modules/@scopekit/core/src/*.ts'],
-        '@scopekit/react': ['./node_modules/@scopekit/react/src/index.ts'],
-        '@scopekit/vue': ['./node_modules/@scopekit/vue/src/index.ts'],
-        '@scopekit/solid': ['./node_modules/@scopekit/solid/src/index.ts'],
-        '@scopekit/svelte': ['./node_modules/@scopekit/svelte/src/index.ts'],
-        '@scopekit/angular': ['./node_modules/@scopekit/angular/src/index.ts'],
+        '@nursery/core': ['./node_modules/@nursery/core/src/index.ts'],
+        '@nursery/core/*': ['./node_modules/@nursery/core/src/*.ts'],
+        '@nursery/react': ['./node_modules/@nursery/react/src/index.ts'],
+        '@nursery/vue': ['./node_modules/@nursery/vue/src/index.ts'],
+        '@nursery/solid': ['./node_modules/@nursery/solid/src/index.ts'],
+        '@nursery/svelte': ['./node_modules/@nursery/svelte/src/index.ts'],
+        '@nursery/angular': ['./node_modules/@nursery/angular/src/index.ts'],
       },
     },
     files,

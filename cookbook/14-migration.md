@@ -5,7 +5,7 @@
 
 ## RxJS
 
-| RxJS | scopekit |
+| RxJS | nursery |
 |---|---|
 | `fromEvent(el, 'click')` | `on(el, 'click', { signal })` |
 | `switchMap(q => search(q))` | `latest((q, signal) => search(q, signal))` |
@@ -15,8 +15,8 @@
 | `bufferCount(10)` | `iter.buffer(10)` |
 | `take(n)` | `iter.take(n)` |
 | `map`, `filter` | `iter.map`, `iter.filter` |
-| `takeUntil(destroy$)` | `signal` скоупа, передаётся в `on` и в задачи |
-| `forkJoin([a, b])` | `Scope.run` с двумя `spawn` |
+| `takeUntil(destroy$)` | `signal` nursery, передаётся в `on` и в задачи |
+| `forkJoin([a, b])` | `Nursery.run` с двумя `spawn` |
 | `race(a, b)` | `race([a, b])` |
 | `retry({ count, delay })` | `retry(task, { retries, delay })` |
 | `timeout(ms)` | `withTimeout(task, ms)` |
@@ -37,9 +37,9 @@ fromEvent<InputEvent>(input, 'input').pipe(
   takeUntil(destroy$),
 ).subscribe(render);
 
-// scopekit
+// nursery
 const search = latest((q: string, signal) => api.search(q, signal));
-scope.spawn(async sig => {
+nursery.spawn(async sig => {
   let last = '';
   for await (const q of pipe(on<InputEvent>(input, 'input', { signal: sig }),
                              map(e => (e.target as HTMLInputElement).value),
@@ -91,7 +91,7 @@ scope.spawn(async sig => {
 
 ## Comlink
 
-| Comlink | scopekit |
+| Comlink | nursery |
 |---|---|
 | `Comlink.expose(api)` | `expose(api)` |
 | `Comlink.wrap<T>(worker)` | `wrap<T>(worker)` |
@@ -111,17 +111,17 @@ scope.spawn(async sig => {
 | `if (signal.aborted) throw signal.reason` | `throwIfAborted(signal)` |
 | `err.name === 'AbortError'` | `isAbort(err)` (ловит и `TimeoutError`) |
 | `new Promise(r => setTimeout(r, ms))` | `sleep(ms, signal)` |
-| контроллер на компонент + `abort()` в cleanup | `Scope` в эффекте + `close()` в cleanup |
+| контроллер на компонент + `abort()` в cleanup | `Nursery` в эффекте + `close()` в cleanup |
 
 ## TanStack Query, SWR
 
-Не заменяются. Они про кеш, инвалидацию и синхронизацию с сервером. scopekit работает
+Не заменяются. Они про кеш, инвалидацию и синхронизацию с сервером. nursery работает
 внутри их `queryFn`:
 
 ```ts
-queryFn: ({ signal }) => Scope.run(async scope => {
-  const a = scope.spawn(sig => http.get('/a', { signal: sig }));
-  const b = scope.spawn(sig => http.get('/b', { signal: sig }));
+queryFn: ({ signal }) => Nursery.run(async nursery => {
+  const a = nursery.spawn(sig => http.get('/a', { signal: sig }));
+  const b = nursery.spawn(sig => http.get('/b', { signal: sig }));
   return { a: await a, b: await b };
 }, { signal });
 ```

@@ -1,43 +1,43 @@
 # React
 
-Хуки поставляются как `@scopekit/react`. Идея одна: **скоуп живёт столько же, сколько эффект**,
+Хуки поставляются как `@nursery/react`. Идея одна: **nursery живёт столько же, сколько эффект**,
 всё остальное надстройки.
 
 ```ts
-import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEventStream, useWorker } from '@scopekit/react';
+import { NurseryProvider, useNursery, useNurseryEffect, useAsync, useLatest, useEventStream, useWorker } from '@nursery/react';
 import { useState, useEffect, useRef } from 'react';
-import { Scope } from '@scopekit/core/scope';
-import { Channel } from '@scopekit/core/events';
-import { pipe, debounce } from '@scopekit/core/iter';
-import { chunked } from '@scopekit/core/schedule';
-import { isAbort } from '@scopekit/core/signal';
+import { Nursery } from '@nursery/core/nursery';
+import { Channel } from '@nursery/core/events';
+import { pipe, debounce } from '@nursery/core/iter';
+import { chunked } from '@nursery/core/schedule';
+import { isAbort } from '@nursery/core/signal';
 ```
 
 | Хук | Что делает |
 |---|---|
-| `useScopedEffect(fn, deps)` | `useEffect`, где `fn` получает `Scope`; предыдущий скоуп закрывается на cleanup |
+| `useNurseryEffect(fn, deps)` | `useEffect`, где `fn` получает `Nursery`; предыдущий nursery закрывается на cleanup |
 | `useAsync(fn, deps)` | `{ status: 'loading' \| 'success' \| 'error' }`, результат отменённого запуска не попадает в state |
 | `useLatest(fn)` | `{ run, pending, cancel }`: новый `run` отменяет прошлый, unmount отменяет последний |
 | `useEventStream(target, type, handler)` | события DOM в цикле `for await`, handler может быть async |
-| `useScope()` | скоуп на время монтирования, ребёнок ближайшего `ScopeProvider` |
-| `ScopeProvider` | родительский скоуп для всего поддерева, даёт контекст и общую отмену |
+| `useNursery()` | nursery на время монтирования, ребёнок ближайшего `NurseryProvider` |
+| `NurseryProvider` | родительский nursery для всего поддерева, даёт контекст и общую отмену |
 | `useWorker(factory)` | воркер создаётся один раз, `terminate` на unmount |
 
-Ошибки эффектов, кроме отмены, уходят в `Scope.onUnhandled`. StrictMode в dev монтирует дважды,
-хуки это учитывают: первый скоуп закрывается, второй работает.
+Ошибки эффектов, кроме отмены, уходят в `Nursery.onUnhandled`. StrictMode в dev монтирует дважды,
+хуки это учитывают: первый nursery закрывается, второй работает.
 
-## useScopedEffect: базовый хук
+## useNurseryEffect: базовый хук
 
-`useScopedEffect(fn, deps)` это `useEffect`, где `fn` получает `Scope`. Каждый запуск эффекта
-получает новый скоуп, предыдущий закрывается в cleanup, поэтому ответы устаревшего запуска в
-состояние не попадают. Ошибки, кроме отмены, уходят в `Scope.onUnhandled`.
+`useNurseryEffect(fn, deps)` это `useEffect`, где `fn` получает `Nursery`. Каждый запуск эффекта
+получает новый nursery, предыдущий закрывается в cleanup, поэтому ответы устаревшего запуска в
+состояние не попадают. Ошибки, кроме отмены, уходят в `Nursery.onUnhandled`.
 
 
 Что это даёт:
 
-- Каждый запуск эффекта получает новый скоуп, предыдущий закрывается в cleanup. Запросы
+- Каждый запуск эффекта получает новый nursery, предыдущий закрывается в cleanup. Запросы
   прошлого запуска отменяются, их ответы не попадут в состояние.
-- StrictMode в dev монтирует дважды: первый скоуп закроется, второй будет работать. Ничего
+- StrictMode в dev монтирует дважды: первый nursery закроется, второй будет работать. Ничего
   специального делать не нужно.
 - Ошибки, кроме отмены, уходят в `reportError` (глобальный `error` event), а не теряются.
 
@@ -47,8 +47,8 @@ import { isAbort } from '@scopekit/core/signal';
 function UserCard({ id }: { id: string }) {
   const [user, setUser] = useState<User | null>(null);
 
-  useScopedEffect(async scope => {
-    const u = await http.get<User>(`/users/${id}`, { signal: scope.signal });
+  useNurseryEffect(async nursery => {
+    const u = await http.get<User>(`/users/${id}`, { signal: nursery.signal });
     setUser(u);          // после unmount сюда не дойдём: запрос отменён, await бросил
   }, [id]);
 
@@ -65,7 +65,7 @@ function UserCard({ id }: { id: string }) {
 
 ```tsx
 function Orders({ userId }: { userId: string }) {
-  const orders = useAsync(scope => http.get<Order[]>('/orders', { signal: scope.signal, query: { userId } }), [userId]);
+  const orders = useAsync(nursery => http.get<Order[]>('/orders', { signal: nursery.signal, query: { userId } }), [userId]);
   if (orders.status === 'loading') return <Spinner />;
   if (orders.status === 'error') return <ErrorBox error={orders.error} />;
   return <OrderList orders={orders.data} />;
@@ -75,9 +75,9 @@ function Orders({ userId }: { userId: string }) {
 Параллельная загрузка с fail-fast бесплатно:
 
 ```tsx
-const page = useAsync(async scope => {
-  const profile = scope.spawn(sig => http.get<Profile>('/me', { signal: sig }));
-  const feed = scope.spawn(sig => http.get<Post[]>('/feed', { signal: sig }));
+const page = useAsync(async nursery => {
+  const profile = nursery.spawn(sig => http.get<Profile>('/me', { signal: sig }));
+  const feed = nursery.spawn(sig => http.get<Post[]>('/feed', { signal: sig }));
   return { profile: await profile, feed: await feed };
 }, []);
 ```
@@ -125,9 +125,9 @@ function AutoSave({ doc }: { doc: string }) {
 
   useEffect(() => { void changes.send(doc); }, [doc, changes]);
 
-  useScopedEffect(async scope => {
+  useNurseryEffect(async nursery => {
     for await (const latestDoc of pipe(changes, debounce(800))) {
-      await http.put('/draft', { signal: scope.signal, body: { doc: latestDoc } }).catch(ignoreAbort);
+      await http.put('/draft', { signal: nursery.signal, body: { doc: latestDoc } }).catch(ignoreAbort);
     }
   }, [changes]);
 
@@ -142,7 +142,7 @@ function AutoSave({ doc }: { doc: string }) {
 
 ```tsx
 const parser = useWorker<typeof api>(() => new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' }));
-const ast = useAsync(scope => parser.parse(src, { signal: scope.signal }), [src, parser]);
+const ast = useAsync(nursery => parser.parse(src, { signal: nursery.signal }), [src, parser]);
 ```
 
 ## Тяжёлый рендер списка без фриза
@@ -150,9 +150,9 @@ const ast = useAsync(scope => parser.parse(src, { signal: scope.signal }), [src,
 ```tsx
 function BigTable({ rows }: { rows: Row[] }) {
   const [rendered, setRendered] = useState<Row[]>([]);
-  useScopedEffect(async scope => {
+  useNurseryEffect(async nursery => {
     const acc: Row[] = [];
-    for await (const row of chunked(rows, { signal: scope.signal })) {
+    for await (const row of chunked(rows, { signal: nursery.signal })) {
       acc.push(enrich(row));
       if (acc.length % 200 === 0) setRendered([...acc]);   // прогрессивный рендер
     }
@@ -164,13 +164,13 @@ function BigTable({ rows }: { rows: Row[] }) {
 
 ## React Router loaders
 
-Loader получает `request.signal`, который абортится при смене маршрута. Привяжите скоуп:
+Loader получает `request.signal`, который абортится при смене маршрута. Привяжите nursery:
 
 ```ts
 export async function loader({ params, request }: LoaderFunctionArgs) {
-  return Scope.run(async scope => {
-    const user = scope.spawn(sig => http.get<User>(`/users/${params.id}`, { signal: sig }));
-    const posts = scope.spawn(sig => http.get<Post[]>(`/users/${params.id}/posts`, { signal: sig }));
+  return Nursery.run(async nursery => {
+    const user = nursery.spawn(sig => http.get<User>(`/users/${params.id}`, { signal: sig }));
+    const posts = nursery.spawn(sig => http.get<Post[]>(`/users/${params.id}/posts`, { signal: sig }));
     return { user: await user, posts: await posts };
   }, { signal: request.signal, timeout: 15_000 });
 }
@@ -187,29 +187,29 @@ useQuery({
 });
 ```
 
-Для сложного `queryFn` с несколькими запросами внутри используйте `Scope.run` с этим
+Для сложного `queryFn` с несколькими запросами внутри используйте `Nursery.run` с этим
 сигналом. Retry и дедупликацию оставьте одному слою: либо Query, либо `http`, иначе
 попытки перемножатся.
 
-## ScopeProvider: скоуп страницы
+## NurseryProvider: nursery страницы
 
 ```tsx
 function Page() {
-  const [scope] = useState(() => new Scope({ name: 'page', ctx: [TraceId.with(newTraceId())], grace: 5000 }));
-  useEffect(() => () => { void scope.close(); }, [scope]);
-  return <ScopeProvider scope={scope}><Dashboard /></ScopeProvider>;
+  const [nursery] = useState(() => new Nursery({ name: 'page', ctx: [TraceId.with(newTraceId())], grace: 5000 }));
+  useEffect(() => () => { void nursery.close(); }, [nursery]);
+  return <NurseryProvider nursery={nursery}><Dashboard /></NurseryProvider>;
 }
 
 function Dashboard() {
-  const scope = useScope();                 // ребёнок скоупа страницы
-  const trace = scope.get(TraceId);
-  useScopedEffect(async s => { /* s тоже ребёнок страницы */ }, []);
+  const nursery = useNursery();                 // ребёнок nursery страницы
+  const trace = nursery.get(TraceId);
+  useNurseryEffect(async s => { /* s тоже ребёнок страницы */ }, []);
   return <Widget trace={trace} />;
 }
 ```
 
-Все хуки под провайдером создают дочерние скоупы: контекст наследуется, закрытие скоупа
-страницы отменяет всё дерево, а `scope.dump()` на странице показывает, какие компоненты и
+Все хуки под провайдером создают дочерние nursery: контекст наследуется, закрытие nursery
+страницы отменяет всё дерево, а `nursery.dump()` на странице показывает, какие компоненты и
 задачи ещё живы.
 
 ## Suspense и use()
@@ -218,13 +218,13 @@ React 19 `use(promise)` требует стабильный промис меж�
 и отменяйте при удалении из кеша:
 
 ```ts
-const cache = new Map<string, { promise: Promise<unknown>; scope: Scope }>();
+const cache = new Map<string, { promise: Promise<unknown>; nursery: Nursery }>();
 
 export function suspend<T>(key: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   let entry = cache.get(key);
   if (!entry) {
-    const scope = new Scope();
-    entry = { scope, promise: scope.spawn(sig => fn(sig)) };
+    const nursery = new Nursery();
+    entry = { nursery, promise: nursery.spawn(sig => fn(sig)) };
     cache.set(key, entry);
   }
   return entry.promise as Promise<T>;
@@ -232,13 +232,13 @@ export function suspend<T>(key: string, fn: (signal: AbortSignal) => Promise<T>)
 
 export function invalidate(key: string) {
   const entry = cache.get(key);
-  if (entry) { cache.delete(key); void entry.scope.close(); }
+  if (entry) { cache.delete(key); void entry.nursery.close(); }
 }
 ```
 
 ## Чек-лист для ревью React-кода
 
-- В `useEffect` с запросом есть `scope.signal` или сигнал из `AbortController` с cleanup.
+- В `useEffect` с запросом есть `nursery.signal` или сигнал из `AbortController` с cleanup.
 - Нет `isMounted`-флагов и `let cancelled = false`.
 - Поиск и фильтры идут через `latest` или его хук.
 - `setState` после `await` стоит там, где `await` бросит при отмене, то есть после

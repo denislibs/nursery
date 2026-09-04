@@ -1,6 +1,6 @@
 # playground
 
-A Vite + React page exercising `@scopekit/core` and `@scopekit/react` against an in-page fake
+A Vite + React page exercising `@nursery/core` and `@nursery/react` against an in-page fake
 backend: a race-prone search, a flaky endpoint with retry, an SSE feed that reconnects, and a
 cancellable worker with progress callbacks.
 

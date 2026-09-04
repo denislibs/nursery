@@ -1,7 +1,7 @@
 import { mount, unmount, flushSync } from 'svelte';
-import Scoped from './fixtures/Scoped.svelte';
-import { sleep, isAbort } from '@scopekit/core/signal';
-import type { Scope } from '@scopekit/core/scope';
+import Nursed from './fixtures/Nursed.svelte';
+import { sleep, isAbort } from '@nursery/core/signal';
+import type { Nursery } from '@nursery/core/nursery';
 import type { useLatest, useWorker } from '../src/index.js';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
@@ -13,19 +13,19 @@ beforeEach(() => {
 afterEach(() => target.remove());
 
 describe('svelte adapter', () => {
-  test('component scope, effect scopes, event stream, latest and worker follow the component lifecycle', async () => {
-    const scopes: Scope[] = [];
+  test('component nursery, effect scopes, event stream, latest and worker follow the component lifecycle', async () => {
+    const nurseries: Nursery[] = [];
     const clicks: string[] = [];
     let remote!: ReturnType<typeof useWorker<typeof EchoApi>>;
     let search!: ReturnType<typeof useLatest<string, string>>;
     const props = $state({ id: 1 });
-    const instance = mount(Scoped, {
+    const instance = mount(Nursed, {
       target,
       props: {
         get id() {
           return props.id;
         },
-        onScope: (s: Scope) => scopes.push(s),
+        onNursery: (s: Nursery) => nurseries.push(s),
         onClick: (t: string) => clicks.push(t),
         onRemote: (
           r: ReturnType<typeof useWorker<typeof EchoApi>>,
@@ -37,14 +37,14 @@ describe('svelte adapter', () => {
       },
     });
     flushSync();
-    expect(scopes.map(s => s.name)).toEqual(['component', expect.any(String)]);
-    const [component, effect1] = scopes as [Scope, Scope];
+    expect(nurseries.map(s => s.name)).toEqual(['component', expect.any(String)]);
+    const [component, effect1] = nurseries as [Nursery, Nursery];
 
     // effect re-run on prop change closes the previous effect scope
     props.id = 2;
     flushSync();
     await sleep(20);
-    expect(scopes).toHaveLength(3);
+    expect(nurseries).toHaveLength(3);
     expect(effect1.signal.aborted).toBe(true);
     expect(target.querySelector('button')!.textContent).toBe('user-2');
 
@@ -76,7 +76,7 @@ describe('svelte adapter', () => {
     unmount(instance);
     await sleep(5);
     expect(component.signal.aborted).toBe(true);
-    expect(scopes[2]!.signal.aborted).toBe(true);
+    expect(nurseries[2]!.signal.aborted).toBe(true);
     await expect(remote.double(1)).rejects.toThrow(/disposed/);
     target.querySelector('button')?.click();
     await sleep(5);

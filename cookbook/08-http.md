@@ -1,10 +1,10 @@
 # HTTP-клиент
 
 ```ts
-import { createHttp, HttpError } from '@scopekit/core/http';
-import { isAbort } from '@scopekit/core/signal';
-import { singleFlight } from '@scopekit/core/latest';
-import { pipe, filter, take } from '@scopekit/core/iter';
+import { createHttp, HttpError } from '@nursery/core/http';
+import { isAbort } from '@nursery/core/signal';
+import { singleFlight } from '@nursery/core/latest';
+import { pipe, filter, take } from '@nursery/core/iter';
 ```
 
 ## Клиент на приложение
@@ -34,8 +34,8 @@ export const http = createHttp({
 ## Типичный вызов
 
 ```ts
-const user = await http.get<User>('/users/1', { signal: scope.signal, query: { expand: 'roles' } });
-await http.post('/users', { signal: scope.signal, body: { name: 'Ann' } });
+const user = await http.get<User>('/users/1', { signal: nursery.signal, query: { expand: 'roles' } });
+await http.post('/users', { signal: nursery.signal, body: { name: 'Ann' } });
 await http.patch(`/users/${id}`, { signal, body: patch, timeout: 5000 });
 ```
 
@@ -89,15 +89,15 @@ function headersOf(init?: RequestInit) {
 
 ## Отменять при уходе со страницы
 
-Всё, что нужно: передавать `scope.signal`. Скоуп страницы закрывается при навигации,
+Всё, что нужно: передавать `nursery.signal`. Nursery страницы закрывается при навигации,
 все запросы этой страницы получают abort, общий `fetch` под дедупликацией отменится, когда
 уйдёт последний подписчик.
 
 ```ts
-export function pageScope(): Scope {
-  const scope = new Scope();
-  router.onLeave(() => void scope.close());
-  return scope;
+export function pageNursery(): Nursery {
+  const nursery = new Nursery();
+  router.onLeave(() => void nursery.close());
+  return nursery;
 }
 ```
 
@@ -137,7 +137,7 @@ async function* allItems(signal: AbortSignal) {
   } while (cursor);
 }
 
-for await (const item of pipe(allItems(scope.signal), filter(i => i.active), take(100))) render(item);
+for await (const item of pipe(allItems(nursery.signal), filter(i => i.active), take(100))) render(item);
 ```
 
 `take(100)` завершит генератор, следующая страница не запросится.
@@ -217,19 +217,19 @@ const http = createHttp({
 
 ```ts
 const User = z.object({ id: z.number(), name: z.string() });
-const user = await http.get('/users/1', { scope, parse: User });   // тип z.infer<typeof User>
+const user = await http.get('/users/1', { nursery, parse: User });   // тип z.infer<typeof User>
 ```
 
 Ошибка схемы отвергает запрос, у неё есть поле `response` с исходным ответом.
 
-## Владелец запроса: signal, scope, deadline
+## Владелец запроса: signal, nursery, deadline
 
-Вместо `signal` можно передать `scope`: клиент возьмёт `scope.signal` и `scope.deadline`.
-Если у скоупа осталось две секунды, попытка не будет ждать пятнадцать:
+Вместо `signal` можно передать `nursery`: клиент возьмёт `nursery.signal` и `nursery.deadline`.
+Если у nursery осталось две секунды, попытка не будет ждать пятнадцать:
 
 ```ts
-await using scope = new Scope({ timeout: 2000 });
-await http.get('/slow', { scope });            // TimeoutError через 2 с, не через 15
+await using nursery = new Nursery({ timeout: 2000 });
+await http.get('/slow', { nursery });            // TimeoutError через 2 с, не через 15
 ```
 
 `deadline` можно передать и явно, это абсолютное время по `performance.now()`. Просроченный
@@ -238,9 +238,9 @@ await http.get('/slow', { scope });            // TimeoutError через 2 с, 
 ## NDJSON и Server-Sent Events
 
 ```ts
-for await (const row of http.stream<Row>('/export', { scope })) append(row);
+for await (const row of http.stream<Row>('/export', { nursery })) append(row);
 
-for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000, maxDelay: 30_000 } })) {
+for await (const e of http.sse('/events', { nursery, reconnect: { delay: 1000, maxDelay: 30_000 } })) {
   if (e.event === 'order') handle(JSON.parse(e.data));
 }
 ```
@@ -253,14 +253,14 @@ for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000, max
 ## Прогресс, вложенный query, цепочка хуков
 
 ```ts
-await http.post('/upload', { scope, body: file, onUploadProgress: (sent, total) => (bar.value = sent / total) });
-const res = await http.request('/big.bin', { scope, onDownloadProgress: (loaded, total) => setProgress(loaded / (total ?? loaded)) });
+await http.post('/upload', { nursery, body: file, onUploadProgress: (sent, total) => (bar.value = sent / total) });
+const res = await http.request('/big.bin', { nursery, onDownloadProgress: (loaded, total) => setProgress(loaded / (total ?? loaded)) });
 
-http.get('/items', { scope, query: { filter: { status: 'open', tags: ['a', 'b'] } } });
+http.get('/items', { nursery, query: { filter: { status: 'open', tags: ['a', 'b'] } } });
 // ?filter[status]=open&filter[tags]=a&filter[tags]=b   (или свой querySerializer)
 
 createHttp({ onRequest: [addAuth, addTrace, logRequest], baseUrl });
-http.get('/health', { scope, baseUrl: 'https://status.example.com' });
+http.get('/health', { nursery, baseUrl: 'https://status.example.com' });
 ```
 
 `onUploadProgress` стримит тело с `duplex: 'half'` кусками по 64 KiB. Это работает в Chromium и
@@ -270,7 +270,7 @@ Node; там, где потоковые тела не поддерживаютс
 
 ```ts
 for await (const e of http.sse('/events', {
-  scope,
+  nursery,
   reconnect: {
     delay: 1000, factor: 2, maxDelay: 30_000,
     onRetry: (err, attempt, delayMs) => log.warn('sse reconnect', { err, attempt, delayMs }),

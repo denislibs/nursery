@@ -1,4 +1,4 @@
-import { Scope, ScopeClosedError, contextKey } from '../src/scope.js';
+import { Nursery, NurseryClosedError, contextKey } from '../src/nursery.js';
 
 const TraceId = contextKey<string>('traceId');
 const User = contextKey<string>('user');
@@ -7,53 +7,53 @@ import { isAbort, sleep } from '../src/signal.js';
 
 const tick = () => new Promise<void>(r => setTimeout(r, 0));
 
-describe('Scope', () => {
-  test('spawn passes the scope signal and abort() cancels children', async () => {
-    const scope = new Scope();
-    const p = scope.spawn(sig => sleep(1000, sig));
-    scope.abort();
+describe('Nursery', () => {
+  test('spawn passes the nursery signal and abort() cancels children', async () => {
+    const nursery = new Nursery();
+    const p = nursery.spawn(sig => sleep(1000, sig));
+    nursery.abort();
     await expect(p).rejects.toSatisfy(isAbort);
-    expect(scope.signal.aborted).toBe(true);
+    expect(nursery.signal.aborted).toBe(true);
   });
 
   test('a failing child aborts its siblings with an AbortError caused by the failure', async () => {
-    const scope = new Scope();
+    const nursery = new Nursery();
     const boom = new Error('boom');
-    const failing = scope.spawn(async () => {
+    const failing = nursery.spawn(async () => {
       throw boom;
     });
-    const sibling = scope.spawn(sig => sleep(1000, sig));
+    const sibling = nursery.spawn(sig => sleep(1000, sig));
     await expect(failing).rejects.toBe(boom);
     await expect(sibling).rejects.toSatisfy((e: unknown) => isAbort(e) && (e as Error).cause === boom);
-    expect(scope.error).toBe(boom);
+    expect(nursery.error).toBe(boom);
   });
 
   test('an aborted child does not count as a failure', async () => {
-    const scope = new Scope();
+    const nursery = new Nursery();
     const c = new AbortController();
-    const p = scope.spawn(sig =>
+    const p = nursery.spawn(sig =>
       sleep(1000, sig).catch(() => {
         c.abort();
         throw c.signal.reason;
       }),
     );
     c.abort();
-    const other = scope.spawn(async () => 'fine');
-    scope.abort();
+    const other = nursery.spawn(async () => 'fine');
+    nursery.abort();
     await p.catch(() => {});
     await expect(other).resolves.toBe('fine');
-    expect(scope.error).toBeUndefined();
+    expect(nursery.error).toBeUndefined();
   });
 
   test('unawaited failing spawn does not produce an unhandled rejection', async () => {
-    const off = Scope.onUnhandled(() => {}); // reported through the hook, not the platform
+    const off = Nursery.onUnhandled(() => {}); // reported through the hook, not the platform
     try {
-      const scope = new Scope();
-      scope.spawn(async () => {
+      const nursery = new Nursery();
+      nursery.spawn(async () => {
         throw new Error('ignored by caller');
       });
-      await scope.settled();
-      expect((scope.error as Error).message).toBe('ignored by caller');
+      await nursery.settled();
+      expect((nursery.error as Error).message).toBe('ignored by caller');
       await new Promise(r => setTimeout(r, 0));
     } finally {
       off();
@@ -63,8 +63,8 @@ describe('Scope', () => {
   test('await using aborts pending children and waits for them to settle', async () => {
     const log: string[] = [];
     {
-      await using scope = new Scope();
-      scope.spawn(async sig => {
+      await using nursery = new Nursery();
+      nursery.spawn(async sig => {
         try {
           await sleep(1000, sig);
         } finally {
@@ -77,22 +77,22 @@ describe('Scope', () => {
     expect(log).toEqual(['leaving block', 'child cleanup', 'after block']);
   });
 
-  test('spawn after close rejects with ScopeClosedError', async () => {
-    const scope = new Scope();
-    await scope.close();
-    await expect(scope.spawn(async () => 1)).rejects.toBeInstanceOf(ScopeClosedError);
+  test('spawn after close rejects with NurseryClosedError', async () => {
+    const nursery = new Nursery();
+    await nursery.close();
+    await expect(nursery.spawn(async () => 1)).rejects.toBeInstanceOf(NurseryClosedError);
   });
 
   test('timeout option aborts with TimeoutError and the timer is cleared on close', async () => {
     vi.useFakeTimers();
-    const scope = new Scope({ timeout: 100 });
-    const p = scope.spawn(sig => sleep(1000, sig));
+    const nursery = new Nursery({ timeout: 100 });
+    const p = nursery.spawn(sig => sleep(1000, sig));
     await vi.advanceTimersByTimeAsync(100);
     await expect(p).rejects.toSatisfy((e: unknown) => (e as DOMException).name === 'TimeoutError');
-    await scope.close();
+    await nursery.close();
     expect(vi.getTimerCount()).toBe(0);
 
-    const fast = new Scope({ timeout: 100 });
+    const fast = new Nursery({ timeout: 100 });
     await fast.close();
     expect(vi.getTimerCount()).toBe(0);
     vi.useRealTimers();
@@ -100,14 +100,14 @@ describe('Scope', () => {
 
   test('links to an external signal', async () => {
     const c = new AbortController();
-    const scope = new Scope({ signal: c.signal });
-    const p = scope.spawn(sig => sleep(1000, sig));
+    const nursery = new Nursery({ signal: c.signal });
+    const p = nursery.spawn(sig => sleep(1000, sig));
     c.abort();
     await expect(p).rejects.toSatisfy(isAbort);
   });
 
-  test('child scope inherits ctx and cancellation from parent, but not the other way round', async () => {
-    const parent = new Scope({ ctx: [TraceId.with('t1'), User.with('u')] });
+  test('child nursery inherits ctx and cancellation from parent, but not the other way round', async () => {
+    const parent = new Nursery({ ctx: [TraceId.with('t1'), User.with('u')] });
     const child = parent.child({ ctx: [User.with('override')] });
     expect(child.get(TraceId)).toBe('t1');
     expect(child.get(User)).toBe('override');
@@ -122,18 +122,18 @@ describe('Scope', () => {
   });
 
   test('get() falls back to the key default and has() reports explicit bindings only', () => {
-    const scope = new Scope();
-    expect(scope.get(Region)).toBe('eu');
-    expect(scope.has(Region)).toBe(false);
-    expect(scope.get(TraceId)).toBeUndefined();
-    const child = scope.child({ ctx: [Region.with('us')] });
+    const nursery = new Nursery();
+    expect(nursery.get(Region)).toBe('eu');
+    expect(nursery.has(Region)).toBe(false);
+    expect(nursery.get(TraceId)).toBeUndefined();
+    const child = nursery.child({ ctx: [Region.with('us')] });
     expect(child.get(Region)).toBe('us');
     expect(child.has(Region)).toBe(true);
   });
 
-  test('spawned task receives the scope as second argument', async () => {
-    const scope = new Scope({ ctx: [TraceId.with('t9')] });
-    const result = await scope.spawn(async (_sig, s) => {
+  test('spawned task receives the nursery as second argument', async () => {
+    const nursery = new Nursery({ ctx: [TraceId.with('t9')] });
+    const result = await nursery.spawn(async (_sig, s) => {
       const inner = await s.spawn(async (_s2, s2) => s2.get(TraceId));
       return `${s.get(TraceId)}/${inner}`;
     });
@@ -144,7 +144,7 @@ describe('Scope', () => {
     const native = (AbortSignal as any).any;
     (AbortSignal as any).any = undefined;
     try {
-      const parent = new Scope();
+      const parent = new Nursery();
       const spy = vi.spyOn(parent.signal, 'removeEventListener');
       const child = parent.child();
       expect(spy).not.toHaveBeenCalled();
@@ -155,9 +155,9 @@ describe('Scope', () => {
     }
   });
 
-  test('parent close waits for child scopes', async () => {
+  test('parent close waits for child nurseries', async () => {
     const log: string[] = [];
-    const parent = new Scope();
+    const parent = new Nursery();
     const child = parent.child();
     child.spawn(async sig => {
       try {
@@ -172,29 +172,29 @@ describe('Scope', () => {
 
   test('defer callbacks run on close in reverse order, after children settle', async () => {
     const log: string[] = [];
-    const scope = new Scope();
-    scope.defer(() => log.push('first registered'));
-    scope.defer(async () => {
+    const nursery = new Nursery();
+    nursery.defer(() => log.push('first registered'));
+    nursery.defer(async () => {
       await tick();
       log.push('second registered');
     });
-    scope.spawn(async sig => {
+    nursery.spawn(async sig => {
       try {
         await sleep(1000, sig);
       } finally {
         log.push('child');
       }
     });
-    await scope.close();
+    await nursery.close();
     expect(log).toEqual(['child', 'second registered', 'first registered']);
   });
 
-  test('Scope.run returns the body result and closes the scope afterwards', async () => {
-    let captured: Scope | undefined;
-    const result = await Scope.run(async scope => {
-      captured = scope;
-      const a = scope.spawn(async () => 1);
-      const b = scope.spawn(async () => 2);
+  test('Nursery.run returns the body result and closes the nursery afterwards', async () => {
+    let captured: Nursery | undefined;
+    const result = await Nursery.run(async nursery => {
+      captured = nursery;
+      const a = nursery.spawn(async () => 1);
+      const b = nursery.spawn(async () => 2);
       return (await a) + (await b);
     });
     expect(result).toBe(3);
@@ -202,11 +202,11 @@ describe('Scope', () => {
     expect(captured!.signal.aborted).toBe(true);
   });
 
-  test('Scope.run rethrows the body error and cancels children', async () => {
+  test('Nursery.run rethrows the body error and cancels children', async () => {
     let childAborted = false;
     await expect(
-      Scope.run(async scope => {
-        scope.spawn(sig =>
+      Nursery.run(async nursery => {
+        nursery.spawn(sig =>
           sleep(1000, sig).catch(e => {
             childAborted = isAbort(e);
             throw e;
@@ -218,10 +218,10 @@ describe('Scope', () => {
     expect(childAborted).toBe(true);
   });
 
-  test('Scope.run: unawaited child failure surfaces as the run error when the body succeeds', async () => {
+  test('Nursery.run: unawaited child failure surfaces as the run error when the body succeeds', async () => {
     await expect(
-      Scope.run(async scope => {
-        scope.spawn(async () => {
+      Nursery.run(async nursery => {
+        nursery.spawn(async () => {
           throw new Error('child failed');
         });
         return 'ok';

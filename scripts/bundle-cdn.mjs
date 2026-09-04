@@ -1,4 +1,4 @@
-// Builds a single minified ESM bundle of @scopekit/core for <script type="module"> usage from a CDN.
+// Builds a single minified ESM bundle of @nursery/core for <script type="module"> usage from a CDN.
 import { build } from 'esbuild';
 import { resolve } from 'node:path';
 import { statSync } from 'node:fs';
@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 
 const repo = resolve(import.meta.dirname, '..');
-const outfile = resolve(repo, 'packages/core/dist/scopekit.min.js');
+const outfile = resolve(repo, 'packages/core/dist/nursery.min.js');
 await build({
   entryPoints: [resolve(repo, 'packages/core/src/index.ts')],
   outfile,
@@ -15,7 +15,7 @@ await build({
   minify: true,
   sourcemap: true,
   target: ['es2022'],
-  banner: { js: '/* @scopekit/core — https://github.com/denislibs/scopekit — MIT */' },
+  banner: { js: '/* @nursery/core — https://github.com/denislibs/nursery — MIT */' },
 });
 const raw = statSync(outfile).size;
 const gz = gzipSync(readFileSync(outfile)).length;

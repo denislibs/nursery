@@ -3,14 +3,14 @@ import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { signal } from '@angular/core';
 import {
-  injectScope,
-  scopedEffect,
+  injectNursery,
+  nurseryEffect,
   injectAsync,
   injectLatest,
   injectEventStream,
   injectWorker,
 } from '../src/index.js';
-import { sleep, isAbort } from '@scopekit/core/signal';
+import { sleep, isAbort } from '@nursery/core/signal';
 import type { api as EchoApi } from '../../core/test/browser/fixtures/echo.worker.js';
 
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -19,20 +19,20 @@ beforeEach(() => TestBed.configureTestingModule({}));
 afterEach(() => TestBed.resetTestingModule());
 
 describe('angular adapter', () => {
-  test('injectScope closes when the injector is destroyed', () => {
-    const scope = TestBed.runInInjectionContext(() => injectScope());
-    expect(scope.signal.aborted).toBe(false);
+  test('injectNursery closes when the injector is destroyed', () => {
+    const nursery = TestBed.runInInjectionContext(() => injectNursery());
+    expect(nursery.signal.aborted).toBe(false);
     TestBed.resetTestingModule();
-    expect(scope.signal.aborted).toBe(true);
+    expect(nursery.signal.aborted).toBe(true);
   });
 
-  test('scopedEffect re-runs with a fresh scope when a signal changes', async () => {
+  test('nurseryEffect re-runs with a fresh nursery when a signal changes', async () => {
     const id = signal(1);
     const signals: AbortSignal[] = [];
     TestBed.runInInjectionContext(() =>
-      scopedEffect(scope => {
+      nurseryEffect(nursery => {
         void id();
-        signals.push(scope.signal);
+        signals.push(nursery.signal);
       }),
     );
     TestBed.tick();
@@ -46,9 +46,9 @@ describe('angular adapter', () => {
   test('injectAsync tracks state and drops cancelled results', async () => {
     const id = signal(1);
     const state = TestBed.runInInjectionContext(() =>
-      injectAsync(async scope => {
+      injectAsync(async nursery => {
         const cur = id();
-        await sleep(cur === 1 ? 50 : 5, scope.signal);
+        await sleep(cur === 1 ? 50 : 5, nursery.signal);
         return `user-${cur}`;
       }),
     );

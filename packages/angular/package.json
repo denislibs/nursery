@@ -1,22 +1,22 @@
 {
-  "name": "@scopekit/angular",
+  "name": "@nursery/angular",
   "version": "1.0.0-rc.1",
-  "description": "Angular injectables for @scopekit/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
+  "description": "Angular injectables for @nursery/core: scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.",
   "keywords": [
     "abortsignal",
     "angular",
     "cancellation",
-    "scopekit",
+    "nursery",
     "structured-concurrency"
   ],
-  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "homepage": "https://github.com/denislibs/nursery#readme",
   "bugs": {
-    "url": "https://github.com/denislibs/scopekit/issues"
+    "url": "https://github.com/denislibs/nursery/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/denislibs/scopekit.git",
+    "url": "git+https://github.com/denislibs/nursery.git",
     "directory": "packages/angular"
   },
   "files": [
@@ -41,7 +41,7 @@
   },
   "peerDependencies": {
     "@angular/core": ">=17",
-    "@scopekit/core": "^1.0.0-rc.1"
+    "@nursery/core": "^1.0.0-rc.1"
   },
   "engines": {
     "node": ">=22"

@@ -31,5 +31,5 @@ export function warn(code: string, message: string, detail: Record<string, unkno
   if (seen.has(key)) return;
   seen.add(key);
   // oxlint-disable-next-line no-console
-  console.warn(`[scopekit] ${message}`, detail);
+  console.warn(`[nursery] ${message}`, detail);
 }

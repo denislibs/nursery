@@ -1,10 +1,10 @@
 # Отмена: сигналы, таймауты, sleep
 
-Всё в scopekit держится на одном правиле: **любая async-функция, которая ждёт сеть, таймер
-или событие, принимает `AbortSignal`**. Этот файл о примитивах из `@scopekit/core/signal`.
+Всё в nursery держится на одном правиле: **любая async-функция, которая ждёт сеть, таймер
+или событие, принимает `AbortSignal`**. Этот файл о примитивах из `@nursery/core/signal`.
 
 ```ts
-import { sleep, isAbort, anySignal, timeoutSignal, throwIfAborted, abortError } from '@scopekit/core/signal';
+import { sleep, isAbort, anySignal, timeoutSignal, throwIfAborted, abortError } from '@nursery/core/signal';
 ```
 
 ## Отменяемая задержка
@@ -61,7 +61,7 @@ loadData(signal).then(render).catch(ignoreAbort);
 **или** истёк общий таймаут. `anySignal` собирает их в один сигнал.
 
 ```ts
-const pageSignal = scope.signal;                      // жизнь страницы
+const pageSignal = nursery.signal;                      // жизнь страницы
 const userCancel = new AbortController();             // кнопка «Отмена»
 const deadline = timeoutSignal(30_000);               // общий дедлайн
 
@@ -93,7 +93,7 @@ try {
 и снимайте связь явно:
 
 ```ts
-import { linkSignals } from '@scopekit/core/signal';
+import { linkSignals } from '@nursery/core/signal';
 
 async function withRequestSignal<T>(parent: AbortSignal, fn: (s: AbortSignal) => Promise<T>) {
   const link = linkSignals([parent, timeoutSignal(10_000)]);
@@ -105,7 +105,7 @@ async function withRequestSignal<T>(parent: AbortSignal, fn: (s: AbortSignal) =>
 }
 ```
 
-`Scope` делает это сам при `close()`.
+`Nursery` делает это сам при `close()`.
 
 ## Проверять отмену внутри длинного синхронного кода
 
@@ -166,8 +166,8 @@ function geocode(address: string, signal: AbortSignal): Promise<Coords> {
 `addEventListener` умеет принимать `signal` сам, это часть платформы:
 
 ```ts
-window.addEventListener('resize', onResize, { signal: scope.signal });
-// при закрытии скоупа слушатель снимется, removeEventListener не нужен
+window.addEventListener('resize', onResize, { signal: nursery.signal });
+// при закрытии nursery слушатель снимется, removeEventListener не нужен
 ```
 
 ## Чек-лист

@@ -5,8 +5,8 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 const coreSrc = fileURLToPath(new URL('./packages/core/src/', import.meta.url));
 const alias = [
-  { find: /^@scopekit\/core$/, replacement: `${coreSrc}index.ts` },
-  { find: /^@scopekit\/core\/(.+)$/, replacement: `${coreSrc}$1.ts` },
+  { find: /^@nursery\/core$/, replacement: `${coreSrc}index.ts` },
+  { find: /^@nursery\/core\/(.+)$/, replacement: `${coreSrc}$1.ts` },
 ];
 
 const nodeTests = ['packages/core/test/*.test.ts', 'test/*.test.ts'];

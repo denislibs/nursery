@@ -4,8 +4,8 @@
     "noEmit": true,
     "types": ["vitest/globals", "node"],
     "paths": {
-      "@scopekit/core": ["./packages/core/src/index.ts"],
-      "@scopekit/core/*": ["./packages/core/src/*.ts"]
+      "@nursery/core": ["./packages/core/src/index.ts"],
+      "@nursery/core/*": ["./packages/core/src/*.ts"]
     }
   },
   "include": ["packages/*/src", "packages/*/test", "test"]

@@ -1,18 +1,18 @@
 # Retry и таймауты
 
 ```ts
-import { withTimeout, retry, race, settle } from '@scopekit/core/combine';
-import { HttpError } from '@scopekit/core/http';
+import { withTimeout, retry, race, settle } from '@nursery/core/combine';
+import { HttpError } from '@nursery/core/http';
 ```
 
 ## Таймаут на операцию
 
 ```ts
-const user = await withTimeout(sig => api.user(id, sig), 5000, scope.signal);
+const user = await withTimeout(sig => api.user(id, sig), 5000, nursery.signal);
 ```
 
 Внутри создаётся сигнал, который абортится через 5 секунд `TimeoutError` **или** когда
-абортится `scope.signal`. Таймер очищается при любом исходе. `withTimeout` не «забывает»
+абортится `nursery.signal`. Таймер очищается при любом исходе. `withTimeout` не «забывает»
 задачу: она реально получает abort, а не продолжает крутиться в фоне.
 
 ## Retry с экспоненциальным backoff
@@ -24,13 +24,13 @@ const data = await retry(sig => api.report(sig), {
   factor: 2,
   jitter: 0.2,       // ±20 %, чтобы клиенты не били в сервер синхронно
   maxDelay: 5000,
-  signal: scope.signal,
+  signal: nursery.signal,
 });
 ```
 
 Правила по умолчанию:
 
-- Отмена извне не ретраится никогда. Если `scope.signal` абортился во время backoff,
+- Отмена извне не ретраится никогда. Если `nursery.signal` абортился во время backoff,
   `retry` сразу отвергается причиной отмены.
 - Любая другая ошибка ретраится, пока есть попытки.
 
@@ -54,7 +54,7 @@ await retry(sig => api.flaky(sig), {
 await withTimeout(
   sig => retry(s => api.flaky(s), { retries: 2, attemptTimeout: 3000, signal: sig }),
   10_000,
-  scope.signal,
+  nursery.signal,
 );
 ```
 
@@ -78,7 +78,7 @@ await retry(sig => api.create(payload, sig), {
 });
 ```
 
-`@scopekit/core/http` делает ровно это из коробки, см. [08-http.md](08-http.md).
+`@nursery/core/http` делает ровно это из коробки, см. [08-http.md](08-http.md).
 
 ## Идемпотентность
 
@@ -93,31 +93,31 @@ await retry(sig => http.post('/payments', { signal: sig, body, headers: { 'idemp
 
 ## Гонка источников: race с отменой проигравших
 
-`Promise.race` оставляет проигравших жить. `race` из scopekit отменяет их.
+`Promise.race` оставляет проигравших жить. `race` из nursery отменяет их.
 
 ```ts
 const config = await race([
   sig => loadFromIndexedDb(sig),
   sig => http.get('/config', { signal: sig }),
-], scope.signal);
+], nursery.signal);
 ```
 
 Первая ошибка тоже «побеждает» и отвергает результат. Нужно «первый успешный»? Тогда это не
-`race`, а `Promise.any` поверх скоупа:
+`race`, а `Promise.any` поверх nursery:
 
 ```ts
-const config = await Scope.run(async scope =>
+const config = await Nursery.run(async nursery =>
   Promise.any([
-    scope.spawn(sig => loadFromIndexedDb(sig)),
-    scope.spawn(sig => http.get('/config', { signal: sig })),
+    nursery.spawn(sig => loadFromIndexedDb(sig)),
+    nursery.spawn(sig => http.get('/config', { signal: sig })),
   ]),
 );
-// Scope.run закроет скоуп на выходе и отменит второго
+// Nursery.run закроет nursery на выходе и отменит второго
 ```
 
-Внимание: `Scope` fail-fast отменит соседа при ошибке первого. Для «первого успешного»
+Внимание: `Nursery` fail-fast отменит соседа при ошибке первого. Для «первого успешного»
 задачи должны ловить свои ошибки и отвергаться уже в `Promise.any`, либо используйте
-дочерние скоупы на каждую задачу.
+дочерние nursery на каждую задачу.
 
 ## Ждать всех и разобрать результаты
 

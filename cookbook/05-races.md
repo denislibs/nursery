@@ -1,10 +1,10 @@
 # Гонки состояния: latest и singleFlight
 
 ```ts
-import { latest, singleFlight } from '@scopekit/core/latest';
-import { Queue } from '@scopekit/core/limit';
-import { on } from '@scopekit/core/events';
-import { iter } from '@scopekit/core';
+import { latest, singleFlight } from '@nursery/core/latest';
+import { Queue } from '@nursery/core/limit';
+import { on } from '@nursery/core/events';
+import { iter } from '@nursery/core';
 ```
 
 ## Проблема
@@ -37,7 +37,7 @@ spinner.hidden = !search.pending;
 Внешний сигнал складывается с внутренним:
 
 ```ts
-search(q, scope.signal);   // отменится и при новом вызове, и при закрытии скоупа
+search(q, nursery.signal);   // отменится и при новом вызове, и при закрытии nursery
 ```
 
 ## latest + debounce
@@ -105,7 +105,7 @@ const p = loadMe();
 ```
 
 Нужна отмена общего запроса, когда ушли **все** подписчики? Так работает дедупликация в
-`@scopekit/core/http`: там считаются подписчики и общий `fetch` абортится на нулевом счётчике.
+`@nursery/core/http`: там считаются подписчики и общий `fetch` абортится на нулевом счётчике.
 
 ## Ещё один вариант гонки: «сохранить, потом перечитать»
 
@@ -130,7 +130,7 @@ saveButton.onclick = () => saves.add(sig => api.save(form.value, sig));
 ## latestBy: последний по ключу
 
 ```ts
-import { latestBy } from '@scopekit/core/latest';
+import { latestBy } from '@nursery/core/latest';
 
 const loadDetail = latestBy((id: string) => id, (id, signal) => api.detail(id, signal));
 

@@ -1,9 +1,9 @@
 /* oxlint-disable typescript/no-explicit-any */
 /* Ambient stubs for cookbook code blocks: anything a recipe references but does not define.
    Script file (no imports/exports): every declaration is global. Recipes shadow these freely. */
-type Scope = import('@scopekit/core/scope').Scope;
-type Http = import('@scopekit/core/http').Http;
-type Channel<T> = import('@scopekit/core/events').Channel<T>;
+type Nursery = import('@nursery/core/nursery').Nursery;
+type Http = import('@nursery/core/http').Http;
+type Channel<T> = import('@nursery/core/events').Channel<T>;
 type User = { id: string; name: string; roles?: string[] };
 type Item = { id: string; active: boolean; label?: string };
 type Order = { id: string };
@@ -30,10 +30,10 @@ interface ImportMeta {
   env: Record<string, string | undefined>;
 }
 
-declare const Scope: typeof import('@scopekit/core/scope').Scope;
+declare const Nursery: typeof import('@nursery/core/nursery').Nursery;
 declare const api: any;
 declare const http: Http;
-declare const scope: Scope;
+declare const nursery: Nursery;
 declare const signal: AbortSignal;
 declare const s1: AbortSignal, s2: AbortSignal, ctrl: AbortController;
 declare const baseUrl: string,
@@ -100,17 +100,17 @@ declare const z: {
   number(): unknown;
   string(): unknown;
 };
-declare const TraceId: import('@scopekit/core/scope').ContextKey<string | undefined>;
-declare const parser: import('@scopekit/core/worker').Remote<ParserApi>,
-  remote: import('@scopekit/core/worker').Remote<any>,
+declare const TraceId: import('@nursery/core/nursery').ContextKey<string | undefined>;
+declare const parser: import('@nursery/core/worker').Remote<ParserApi>,
+  remote: import('@nursery/core/worker').Remote<any>,
   worker: Worker;
-declare const uploadSlots: import('@scopekit/core/limit').Semaphore, loadMe: (arg?: void) => Promise<User>;
-declare const search: import('@scopekit/core/latest').LatestFn<string, Item[]>;
+declare const uploadSlots: import('@nursery/core/limit').Semaphore, loadMe: (arg?: void) => Promise<User>;
+declare const search: import('@nursery/core/latest').LatestFn<string, Item[]>;
 declare let dropped: number;
 declare const e: Event, onProgress: (loaded: number, total?: number) => void;
-declare const addAuth: import('@scopekit/core/http').RequestHook,
-  addTrace: import('@scopekit/core/http').RequestHook,
-  logRequest: import('@scopekit/core/http').RequestHook;
+declare const addAuth: import('@nursery/core/http').RequestHook,
+  addTrace: import('@nursery/core/http').RequestHook,
+  logRequest: import('@nursery/core/http').RequestHook;
 declare const currentUser: User;
 declare const Card: (p: any) => any,
   ErrorBox: (p: any) => any,
@@ -217,6 +217,6 @@ declare namespace screen {
   function findByText(t: string): Promise<HTMLElement>;
 }
 declare const query: import('vue').Ref<string>, results: import('vue').ShallowRef<Item[]>;
-declare const pageScope: Scope;
+declare const pageNursery: Nursery;
 declare function prefetch(signal: AbortSignal): Promise<void>;
 declare const Widget: (p: any) => any;

@@ -1,7 +1,7 @@
 import { createHttp, HttpError } from '../src/http.js';
 import { toArray } from '../src/iter.js';
 import { isAbort } from '../src/signal.js';
-import { Scope } from '../src/scope.js';
+import { Nursery } from '../src/nursery.js';
 
 const sig = () => new AbortController().signal;
 const json = (body: unknown, init: ResponseInit = {}) =>
@@ -140,15 +140,15 @@ describe('deadline', () => {
     await expectation;
     vi.useRealTimers();
   });
-  test('scope option takes signal and deadline from a Scope', async () => {
+  test('nursery option takes signal and deadline from a Nursery', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const f = fakeFetch(
       (_u, init) =>
         new Promise((_r, rej) => init.signal!.addEventListener('abort', () => rej(init.signal!.reason))),
     );
     const http = createHttp({ fetch: f.fn, timeout: 10_000 });
-    const scope = new Scope({ timeout: 150 });
-    const expectation = expect(http.get('https://x/a', { scope })).rejects.toSatisfy(isAbort);
+    const nursery = new Nursery({ timeout: 150 });
+    const expectation = expect(http.get('https://x/a', { nursery })).rejects.toSatisfy(isAbort);
     await vi.advanceTimersByTimeAsync(150);
     await expectation;
     vi.useRealTimers();

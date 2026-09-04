@@ -1,5 +1,5 @@
 {
-  "name": "scopekit-monorepo",
+  "name": "nursery-monorepo",
   "version": "1.0.0-rc.1",
   "private": true,
   "license": "MIT",
@@ -16,7 +16,7 @@
     "test:node": "vitest run --project node",
     "test:browser": "vitest run --project browser",
     "test:watch": "vitest --project node",
-    "build": "npm run build -w @scopekit/core && npm run build -w @scopekit/react -w @scopekit/vue -w @scopekit/solid -w @scopekit/svelte -w @scopekit/angular",
+    "build": "npm run build -w @nursery/core && npm run build -w @nursery/react -w @nursery/vue -w @nursery/solid -w @nursery/svelte -w @nursery/angular",
     "check:types-consumer": "node scripts/check-consumer-types.mjs",
     "check:pkg": "node scripts/check-packages.mjs",
     "check:cookbook": "node scripts/check-cookbook.mjs && node scripts/check-cookbook-compile.mjs",
@@ -55,31 +55,31 @@
   },
   "size-limit": [
     {
-      "name": "@scopekit/core/scope { Scope }",
-      "path": "packages/core/dist/scope.js",
-      "import": "{ Scope }",
+      "name": "@nursery/core/nursery { Nursery }",
+      "path": "packages/core/dist/nursery.js",
+      "import": "{ Nursery }",
       "limit": "3 kB"
     },
     {
-      "name": "@scopekit/core/iter { debounce }",
+      "name": "@nursery/core/iter { debounce }",
       "path": "packages/core/dist/iter.js",
       "import": "{ debounce }",
       "limit": "1 kB"
     },
     {
-      "name": "@scopekit/core/signal { sleep }",
+      "name": "@nursery/core/signal { sleep }",
       "path": "packages/core/dist/signal.js",
       "import": "{ sleep }",
       "limit": "400 B"
     },
     {
-      "name": "@scopekit/core/http { createHttp }",
+      "name": "@nursery/core/http { createHttp }",
       "path": "packages/core/dist/http.js",
       "import": "{ createHttp }",
       "limit": "4 kB"
     },
     {
-      "name": "@scopekit/core (everything)",
+      "name": "@nursery/core (everything)",
       "path": "packages/core/dist/index.js",
       "limit": "12 kB"
     }

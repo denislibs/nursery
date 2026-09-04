@@ -1,32 +1,35 @@
 /// <reference lib="dom" />
-/** SolidJS adapters. Import from 'scopekit/solid'; requires solid-js >= 1.7. */
+/** SolidJS adapters. Import from 'nursery/solid'; requires solid-js >= 1.7. */
 import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
-import { Scope, type ScopeOptions } from '@scopekit/core/scope';
-import { latest } from '@scopekit/core/latest';
-import { isAbort } from '@scopekit/core/signal';
-import { on, type OnOptions } from '@scopekit/core/events';
-import { wrap, type Remote } from '@scopekit/core/worker';
+import { Nursery, type NurseryOptions } from '@nursery/core/nursery';
+import { latest } from '@nursery/core/latest';
+import { isAbort } from '@nursery/core/signal';
+import { on, type OnOptions } from '@nursery/core/events';
+import { wrap, type Remote } from '@nursery/core/worker';
 
-/** A scope that closes when the owning reactive root is disposed. */
-export function createScope(opts?: ScopeOptions): Scope {
-  const scope = new Scope(opts);
+/** A nursery that closes when the owning reactive root is disposed. */
+export function createNursery(opts?: NurseryOptions): Nursery {
+  const nursery = new Nursery(opts);
   onCleanup(() => {
-    void scope.close();
+    void nursery.close();
   });
-  return scope;
+  return nursery;
 }
 
 /**
- * createEffect with a Scope. Signals read in the synchronous part of `effect` are tracked;
- * each re-run closes the previous scope.
+ * createEffect with a Nursery. Signals read in the synchronous part of `effect` are tracked;
+ * each re-run closes the previous nursery.
  */
-export function scopedEffect(effect: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions): void {
+export function nurseryEffect(
+  effect: (nursery: Nursery) => void | Promise<void>,
+  opts?: NurseryOptions,
+): void {
   createEffect(() => {
-    const scope = new Scope(opts);
+    const nursery = new Nursery(opts);
     onCleanup(() => {
-      void scope.close();
+      void nursery.close();
     });
-    void scope.spawn((_sig, s) => Promise.resolve(effect(s)), { name: 'effect' });
+    void nursery.spawn((_sig, s) => Promise.resolve(effect(s)), { name: 'effect' });
   });
 }
 
@@ -37,16 +40,16 @@ export interface CreateAsync<T> {
 }
 
 /** Loads data in a scoped effect. Results of a cancelled run never reach the signals. */
-export function createAsync<T>(fn: (scope: Scope) => Promise<T>, opts?: ScopeOptions): CreateAsync<T> {
+export function createAsync<T>(fn: (nursery: Nursery) => Promise<T>, opts?: NurseryOptions): CreateAsync<T> {
   const [data, setData] = createSignal<T | null>(null);
   const [error, setError] = createSignal<unknown>(null);
   const [loading, setLoading] = createSignal(false);
-  scopedEffect(async scope => {
+  nurseryEffect(async nursery => {
     setLoading(true);
     setError(null);
     try {
-      const value = await fn(scope);
-      if (!scope.signal.aborted) {
+      const value = await fn(nursery);
+      if (!nursery.signal.aborted) {
         setData(() => value);
         setLoading(false);
       }
@@ -90,11 +93,11 @@ export function createLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<
 export function createEventStream<E extends Event = Event>(
   target: EventTarget,
   type: string,
-  handler: (event: E, scope: Scope) => void | Promise<void>,
+  handler: (event: E, nursery: Nursery) => void | Promise<void>,
   opts?: Omit<OnOptions, 'signal'>,
 ): void {
-  const scope = createScope({ name: `on:${type}` });
-  void scope.spawn(async (sig, s) => {
+  const nursery = createNursery({ name: `on:${type}` });
+  void nursery.spawn(async (sig, s) => {
     for await (const e of on<E>(target, type, { ...opts, signal: sig })) await handler(e, s);
   });
 }

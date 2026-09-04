@@ -14,7 +14,7 @@ const modules = [
   'combine',
   'limit',
   'latest',
-  'scope',
+  'nursery',
   'events',
   'iter',
   'schedule',
@@ -33,7 +33,7 @@ describe('package exports map', () => {
   });
 
   test('exposes the CDN bundle with the root types', () => {
-    expect(pkg.exports['./bundle']).toEqual({ types: './dist/index.d.ts', import: './dist/scopekit.min.js' });
+    expect(pkg.exports['./bundle']).toEqual({ types: './dist/index.d.ts', import: './dist/nursery.min.js' });
   });
 
   test.each(entries)('%s points at a built file with a matching source', (key, entry) => {

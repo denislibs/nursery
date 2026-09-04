@@ -17,19 +17,19 @@ export { Semaphore, Mutex, map, mapSettled, Queue } from './limit.js';
 export type { Release, MapOptions, MapFn, QueueOptions, QueueAddOptions } from './limit.js';
 export { latest, latestBy, singleFlight } from './latest.js';
 export type { LatestFn, LatestByFn, SingleFlightOptions } from './latest.js';
-export { Scope, ScopeClosedError, ScopeStuckError, ContextKey, contextKey } from './scope.js';
+export { Nursery, NurseryClosedError, NurseryStuckError, ContextKey, contextKey } from './nursery.js';
 export type {
-  ScopeOptions,
+  NurseryOptions,
   SpawnOptions,
   ChildOptions,
   CloseOptions,
-  ScopedTask,
+  NurseryTask,
   ContextBinding,
   TaskInfo,
-  ScopeTree,
+  NurseryTree,
   UnhandledContext,
   UnhandledHandler,
-} from './scope.js';
+} from './nursery.js';
 export { on, Channel, ChannelClosedError, select } from './events.js';
 export type { OnOptions, SelectResult, AnyChannel } from './events.js';
 export * as iter from './iter.js';

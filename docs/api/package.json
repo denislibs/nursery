@@ -1,5 +1,5 @@
 {
-  "name": "scopekit-api-docs",
+  "name": "nursery-api-docs",
   "private": true,
   "type": "module",
   "description": "API reference generator. Isolated because typedoc needs TypeScript <= 6 while the packages compile with TypeScript 7.",

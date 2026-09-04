@@ -1,7 +1,7 @@
 # Главный поток: не блокировать ввод
 
 ```ts
-import { yieldToMain, chunked, idle, frame } from '@scopekit/core/schedule';
+import { yieldToMain, chunked, idle, frame } from '@nursery/core/schedule';
 ```
 
 ## Тяжёлый цикл
@@ -54,7 +54,7 @@ await paintPhase();
 Прогрев кеша, предзагрузка следующего экрана, отправка метрик:
 
 ```ts
-scope.spawn(async sig => {
+nursery.spawn(async sig => {
   const deadline = await idle({ timeout: 2000, signal: sig });
   while (deadline.timeRemaining() > 0 && queue.length) prewarm(queue.shift()!);
 });
@@ -106,7 +106,7 @@ React, Vue и остальные батчат обновления. Вызов `
 ## postTask: приоритеты
 
 ```ts
-import { postTask } from '@scopekit/core/schedule';
+import { postTask } from '@nursery/core/schedule';
 
 await postTask(() => renderVisibleRows(), { priority: 'user-blocking', signal });
 await postTask(() => warmCache(), { priority: 'background', signal, delay: 500 });

@@ -19,7 +19,7 @@ export type Remote<T> = {
 } & Disposable;
 
 const transferLists = new WeakMap<object, Transferable[]>();
-const CALLBACK = Symbol('scopekit.callback');
+const CALLBACK = Symbol('nursery.callback');
 interface CallbackMarker {
   [CALLBACK]: AnyFn;
 }
@@ -391,7 +391,7 @@ class Peer {
 // ---- public API ---------------------------------------------------------------------------
 
 /**
- * Worker side. Exposes `api` on the endpoint (defaults to the worker global scope).
+ * Worker side. Exposes `api` on the endpoint (defaults to the worker global nursery).
  * AbortSignals arrive live; callback() arguments arrive as async functions; transfer() is honoured
  * for arguments, return values and callback traffic, at any nesting depth.
  */

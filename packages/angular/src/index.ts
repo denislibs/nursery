@@ -1,32 +1,32 @@
 /// <reference lib="dom" />
-/** Angular adapters. Import from 'scopekit/angular'; requires @angular/core >= 17 (signals, DestroyRef). */
+/** Angular adapters. Import from 'nursery/angular'; requires @angular/core >= 17 (signals, DestroyRef). */
 import { DestroyRef, effect, inject, signal, type Signal } from '@angular/core';
-import { Scope, type ScopeOptions } from '@scopekit/core/scope';
-import { latest } from '@scopekit/core/latest';
-import { isAbort } from '@scopekit/core/signal';
-import { on, type OnOptions } from '@scopekit/core/events';
-import { wrap, type Remote } from '@scopekit/core/worker';
+import { Nursery, type NurseryOptions } from '@nursery/core/nursery';
+import { latest } from '@nursery/core/latest';
+import { isAbort } from '@nursery/core/signal';
+import { on, type OnOptions } from '@nursery/core/events';
+import { wrap, type Remote } from '@nursery/core/worker';
 
-/** A scope that closes when the current injection context is destroyed. Call in a constructor or field initializer. */
-export function injectScope(opts?: ScopeOptions): Scope {
-  const scope = new Scope(opts);
+/** A nursery that closes when the current injection context is destroyed. Call in a constructor or field initializer. */
+export function injectNursery(opts?: NurseryOptions): Nursery {
+  const nursery = new Nursery(opts);
   inject(DestroyRef).onDestroy(() => {
-    void scope.close();
+    void nursery.close();
   });
-  return scope;
+  return nursery;
 }
 
 /**
- * Angular effect() with a Scope. Signals read in the synchronous part of `fn` are tracked;
- * each re-run closes the previous scope.
+ * Angular effect() with a Nursery. Signals read in the synchronous part of `fn` are tracked;
+ * each re-run closes the previous nursery.
  */
-export function scopedEffect(fn: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions): void {
+export function nurseryEffect(fn: (nursery: Nursery) => void | Promise<void>, opts?: NurseryOptions): void {
   effect(onCleanup => {
-    const scope = new Scope(opts);
+    const nursery = new Nursery(opts);
     onCleanup(() => {
-      void scope.close();
+      void nursery.close();
     });
-    void scope.spawn((_sig, s) => Promise.resolve(fn(s)), { name: 'effect' });
+    void nursery.spawn((_sig, s) => Promise.resolve(fn(s)), { name: 'effect' });
   });
 }
 
@@ -37,16 +37,16 @@ export interface InjectAsync<T> {
 }
 
 /** Loads data in a scoped effect. Results of a cancelled run never reach the signals. */
-export function injectAsync<T>(fn: (scope: Scope) => Promise<T>, opts?: ScopeOptions): InjectAsync<T> {
+export function injectAsync<T>(fn: (nursery: Nursery) => Promise<T>, opts?: NurseryOptions): InjectAsync<T> {
   const data = signal<T | null>(null);
   const error = signal<unknown>(null);
   const loading = signal(false);
-  scopedEffect(async scope => {
+  nurseryEffect(async nursery => {
     loading.set(true);
     error.set(null);
     try {
-      const value = await fn(scope);
-      if (!scope.signal.aborted) {
+      const value = await fn(nursery);
+      if (!nursery.signal.aborted) {
         data.set(value);
         loading.set(false);
       }
@@ -90,11 +90,11 @@ export function injectLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<
 export function injectEventStream<E extends Event = Event>(
   target: EventTarget,
   type: string,
-  handler: (event: E, scope: Scope) => void | Promise<void>,
+  handler: (event: E, nursery: Nursery) => void | Promise<void>,
   opts?: Omit<OnOptions, 'signal'>,
 ): void {
-  const scope = injectScope({ name: `on:${type}` });
-  void scope.spawn(async (sig, s) => {
+  const nursery = injectNursery({ name: `on:${type}` });
+  void nursery.spawn(async (sig, s) => {
     for await (const e of on<E>(target, type, { ...opts, signal: sig })) await handler(e, s);
   });
 }

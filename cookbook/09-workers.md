@@ -1,17 +1,17 @@
 # Воркеры
 
 ```ts
-import { expose } from '@scopekit/core/worker';                    // в воркере
-import { wrap, type Remote, type Endpoint } from '@scopekit/core/worker';   // в главном потоке
-import { isAbort } from '@scopekit/core/signal';
-import { Queue, map } from '@scopekit/core/limit';
+import { expose } from '@nursery/core/worker';                    // в воркере
+import { wrap, type Remote, type Endpoint } from '@nursery/core/worker';   // в главном потоке
+import { isAbort } from '@nursery/core/signal';
+import { Queue, map } from '@nursery/core/limit';
 ```
 
 ## Минимальный пример
 
 ```ts
 // parser.worker.ts
-import { expose } from '@scopekit/core/worker';
+import { expose } from '@nursery/core/worker';
 
 export const api = {
   async parse(src: string, opts: { signal: AbortSignal }) {
@@ -24,13 +24,13 @@ expose(api);
 
 ```ts
 // main.ts
-import { wrap } from '@scopekit/core/worker';
+import { wrap } from '@nursery/core/worker';
 import type { api } from './parser.worker.js';
 
 const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
 const parser = wrap<typeof api>(worker);
 
-const ast = await parser.parse(source, { signal: scope.signal });
+const ast = await parser.parse(source, { signal: nursery.signal });
 ```
 
 `typeof api` даёт полную типизацию: аргументы и результат проверяются компилятором,
@@ -67,15 +67,15 @@ try {
 Значение, которое нельзя склонировать (функция, DOM-узел), отвергает вызов ошибкой
 `DataCloneError`, а не подвешивает его.
 
-## Жизненный цикл в Scope
+## Жизненный цикл в Nursery
 
 ```ts
-await using scope = new Scope();
+await using nursery = new Nursery();
 const worker = new Worker(new URL('./w.ts', import.meta.url), { type: 'module' });
 const remote = wrap<Api>(worker);
-scope.defer(() => { remote[Symbol.dispose](); worker.terminate(); });
+nursery.defer(() => { remote[Symbol.dispose](); worker.terminate(); });
 
-const result = await remote.compute(data, { signal: scope.signal });
+const result = await remote.compute(data, { signal: nursery.signal });
 ```
 
 `Symbol.dispose` снимает слушатель и отвергает все незавершённые вызовы. Обычный `using`
@@ -161,7 +161,7 @@ remote[Symbol.dispose](); stop(); port1.close(); port2.close();
 ## transfer: перемещать буферы вместо копирования
 
 ```ts
-import { transfer } from '@scopekit/core/worker';
+import { transfer } from '@nursery/core/worker';
 
 const pixels = new Uint8ClampedArray(w * h * 4);
 const out = await remote.blur(transfer({ pixels, w, h }, [pixels.buffer]), { signal });
@@ -179,7 +179,7 @@ export const workerApi = {
 ## callback: прогресс и вопросы из воркера
 
 ```ts
-import { callback } from '@scopekit/core/worker';
+import { callback } from '@nursery/core/worker';
 
 await remote.index(files, {
   signal,
@@ -195,11 +195,11 @@ await remote.index(files, {
 ## Пул воркеров
 
 ```ts
-import { createPool } from '@scopekit/core/worker';
+import { createPool } from '@nursery/core/worker';
 
 const pool = createPool<typeof api>(
   () => new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' }),
-  { size: navigator.hardwareConcurrency ?? 4, signal: scope.signal },
+  { size: navigator.hardwareConcurrency ?? 4, signal: nursery.signal },
 );
 
 const ast = await pool.api.parse(src, { signal });   // очередь, наименее занятый воркер
@@ -216,7 +216,7 @@ pool.dispose();                                        // или `using pool = c
 результатах колбэков, а колбэк может принимать колбэк:
 
 ```ts
-import { callback, transfer } from '@scopekit/core/worker';
+import { callback, transfer } from '@nursery/core/worker';
 await remote.run(chunks.map(c => ({ chunk: transfer(c, [c.buffer]), onDone: callback(markDone) })));
 await remote.produce(callback(async (chunk: ArrayBuffer) => transfer(process(chunk), [chunk])));
 ```

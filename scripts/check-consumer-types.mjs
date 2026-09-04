@@ -10,7 +10,7 @@ const repo = resolve(import.meta.dirname, '..');
 const root = join(repo, 'packages', 'core');
 const pkg = JSON.parse(readFile('package.json'));
 const name = pkg.name;
-const dir = mkdtempSync(join(tmpdir(), 'scopekit-types-'));
+const dir = mkdtempSync(join(tmpdir(), 'nursery-types-'));
 mkdirSync(join(dir, 'node_modules', '@types'), { recursive: true });
 rmSync(join(dir, 'node_modules', '@types'), { recursive: true });
 symlinkSync(join(repo, 'node_modules', '@types'), join(dir, 'node_modules', '@types'), 'dir');
@@ -23,22 +23,22 @@ writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
 
 const cases = {
   'core.ts': `
-    import { Scope, contextKey } from '${name}/scope';
+    import { Nursery, contextKey } from '${name}/nursery';
     import { sleep, anySignal } from '${name}/signal';
     import { retry, withTimeout } from '${name}/combine';
     import { Semaphore, Queue, map } from '${name}/limit';
     import { latest, latestBy } from '${name}/latest';
     import { pipe, debounce, toArray } from '${name}/iter';
     import { onWarning } from '${name}/diagnostics';
-    export const all = { Scope, contextKey, sleep, anySignal, retry, withTimeout, Semaphore, Queue, map, latest, latestBy, pipe, debounce, toArray, onWarning };`,
+    export const all = { Nursery, contextKey, sleep, anySignal, retry, withTimeout, Semaphore, Queue, map, latest, latestBy, pipe, debounce, toArray, onWarning };`,
   'dom.ts': `
     import { on, Channel } from '${name}/events';
     import { createHttp } from '${name}/http';
     import { wrap } from '${name}/worker';
     import { chunked } from '${name}/schedule';
     import { fakeFetch } from '${name}/testing';
-    import { Scope } from '${name}';
-    export const all = { on, Channel, createHttp, wrap, chunked, fakeFetch, Scope };`,
+    import { Nursery } from '${name}';
+    export const all = { on, Channel, createHttp, wrap, chunked, fakeFetch, Nursery };`,
 };
 let failed = false;
 for (const [file, code] of Object.entries(cases)) {

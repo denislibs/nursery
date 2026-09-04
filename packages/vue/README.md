@@ -1,9 +1,9 @@
-# @scopekit/vue
+# @nursery/vue
 
-Vue 3 composables for [scopekit](https://github.com/denislibs/scopekit): scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.
+Vue 3 composables for [nursery](https://github.com/denislibs/nursery): scoped effects, async state, latest-wins calls, event streams and workers tied to the component lifecycle.
 
 ```bash
-npm i @scopekit/core @scopekit/vue
+npm i @nursery/core @nursery/vue
 ```
 
-Documentation and recipes live in the [repository](https://github.com/denislibs/scopekit#readme).
+Documentation and recipes live in the [repository](https://github.com/denislibs/nursery#readme).

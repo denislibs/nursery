@@ -11,7 +11,7 @@ const refs =
   pkg === 'core'
     ? {
         dom: ['events', 'schedule', 'worker', 'testing', 'http', 'index'],
-        'esnext.disposable': ['scope', 'index'],
+        'esnext.disposable': ['nursery', 'index'],
       }
     : { dom: ['index'], 'esnext.disposable': ['index'] };
 for (const [lib, files] of Object.entries(refs)) {

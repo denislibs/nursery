@@ -1,24 +1,24 @@
 # События как потоки
 
 ```ts
-import { on, Channel } from '@scopekit/core/events';
-import { pipe, map, filter, take, buffer, debounce, throttle, toArray } from '@scopekit/core/iter';
-import { anySignal, abortError } from '@scopekit/core/signal';
-import { withTimeout } from '@scopekit/core/combine';
+import { on, Channel } from '@nursery/core/events';
+import { pipe, map, filter, take, buffer, debounce, throttle, toArray } from '@nursery/core/iter';
+import { anySignal, abortError } from '@nursery/core/signal';
+import { withTimeout } from '@nursery/core/combine';
 ```
 
 ## on: события в цикле for-await
 
 ```ts
-for await (const e of on<MouseEvent>(canvas, 'pointermove', { signal: scope.signal })) {
+for await (const e of on<MouseEvent>(canvas, 'pointermove', { signal: nursery.signal })) {
   draw(e.offsetX, e.offsetY);
 }
-console.log('цикл закончился, скоуп закрыт');
+console.log('цикл закончился, nursery закрыт');
 ```
 
 - События, пришедшие пока тело цикла ждёт `await`, буферизуются и не теряются.
 - Abort сигнала **завершает** цикл, а не бросает. Это сделано намеренно: такой цикл
-  обычно и есть тело скоупа, исключение здесь только шум.
+  обычно и есть тело nursery, исключение здесь только шум.
 - Listener снимается при `break`, `return`, исключении в теле и при abort.
 - Опции `capture`, `passive`, `once` передаются в `addEventListener`.
 
@@ -64,7 +64,7 @@ async function once<E extends Event>(target: EventTarget, type: string, signal: 
   throw signal.reason ?? abortError();
 }
 
-const msg = await withTimeout(sig => once<MessageEvent>(ws, 'message', sig), 5000, scope.signal);
+const msg = await withTimeout(sig => once<MessageEvent>(ws, 'message', sig), 5000, nursery.signal);
 ```
 
 ## Операторы
@@ -103,12 +103,12 @@ export function track(e: AnalyticsEvent) {
   void events.send(e).catch(() => {});     // при переполнении не блокируем UI, просто теряем
 }
 
-scope.spawn(async sig => {
+nursery.spawn(async sig => {
   for await (const batch of pipe(events, buffer({ ms: 2000 }))) {
     await http.post('/analytics', { signal: sig, body: batch }).catch(() => {});
   }
 });
-scope.defer(() => events.close());
+nursery.defer(() => events.close());
 ```
 
 Внимание: `send` на полном канале **ждёт**, а не отбрасывает. Строка с `.catch` выше
@@ -124,14 +124,14 @@ scope.defer(() => events.close());
 const jobs = new Channel<Job>(8);
 
 // продюсер сам замедлится, если потребители не успевают
-scope.spawn(async sig => {
+nursery.spawn(async sig => {
   for await (const job of pollJobs(sig)) await jobs.send(job, sig);
   jobs.close();
 });
 
 // три потребителя
 for (let i = 0; i < 3; i++) {
-  scope.spawn(async sig => {
+  nursery.spawn(async sig => {
     for await (const job of jobs) await process(job, sig);
   });
 }
@@ -164,7 +164,7 @@ async function* messages(ws: WebSocket, signal: AbortSignal) {
   for await (const e of on<MessageEvent>(ws, 'message', { signal })) yield JSON.parse(e.data);
 }
 
-for await (const msg of pipe(messages(ws, scope.signal), filter(isChatMessage))) appendMessage(msg);
+for await (const msg of pipe(messages(ws, nursery.signal), filter(isChatMessage))) appendMessage(msg);
 ```
 
 ## Отмена в цепочке
@@ -175,7 +175,7 @@ for await (const msg of pipe(messages(ws, scope.signal), filter(isChatMessage)))
 ## Дополнительные операторы
 
 ```ts
-import { distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from '@scopekit/core/iter';
+import { distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from '@nursery/core/iter';
 ```
 
 | Оператор | Что делает |
@@ -208,7 +208,7 @@ const all = pipe(merge(messages(wsA, signal), messages(wsB, signal)), timeout(30
 ## select: первый из нескольких каналов
 
 ```ts
-import { select } from '@scopekit/core/events';
+import { select } from '@nursery/core/events';
 
 for (;;) {
   const r = await select([jobs, controls], signal);
@@ -223,14 +223,14 @@ for (;;) {
 ## zip, combineLatest, share
 
 ```ts
-import { zip, combineLatest, share } from '@scopekit/core/iter';
+import { zip, combineLatest, share } from '@nursery/core/iter';
 
 for await (const [tick, price] of zip(ticks, prices)) plot(tick, price);       // по позиции
 for await (const [size, theme] of combineLatest(sizes, themes)) relayout(size, theme); // последнее из каждого
 
 const clicks = share(on<MouseEvent>(button, 'click', { signal }));     // один listener
-scope.spawn(async () => { for await (const e of clicks) analytics(e); });
-scope.spawn(async () => { for await (const e of pipe(clicks, throttle(500))) save(); });
+nursery.spawn(async () => { for await (const e of clicks) analytics(e); });
+nursery.spawn(async () => { for await (const e of pipe(clicks, throttle(500))) save(); });
 ```
 
 `share` подписывается на источник при первом потребителе и отписывается, когда уходит последний.
@@ -252,6 +252,6 @@ const r = jobs.tryReceive();                 // { ok: true, value } | { ok: fals
 `resubscribe` источник запускается заново для следующего потребителя:
 
 ```ts
-import { share } from '@scopekit/core/iter';
+import { share } from '@nursery/core/iter';
 const prices = share(() => messages(openSocket(), signal), { resubscribe: true });
 ```
