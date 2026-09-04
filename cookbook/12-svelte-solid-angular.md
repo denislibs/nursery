@@ -1,13 +1,13 @@
 # Svelte, SolidJS, Angular, Web Components
 
-Адаптеры поставляются как `scopekit/svelte`, `scopekit/solid` и `scopekit/angular`.
+Адаптеры поставляются как `@scopekit/svelte`, `@scopekit/solid` и `@scopekit/angular`.
 Во всех подход один: скоуп создаётся, когда компонент или эффект стартует, и закрывается в
 cleanup. Ниже их использование и то, как они устроены внутри.
 
 ```ts
-import { useScope, scopedEffect, useLatest, eventStream, useWorker } from 'scopekit/svelte';
-import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from 'scopekit/solid';
-import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from 'scopekit/angular';
+import { useScope, scopedEffect, useLatest, eventStream, useWorker } from '@scopekit/svelte';
+import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from '@scopekit/solid';
+import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '@scopekit/angular';
 ```
 
 Svelte 5: руны это компилятор, поэтому перезапуск остаётся в вашем `$effect`, а `scopedEffect`
@@ -37,8 +37,8 @@ Svelte 5: руны это компилятор, поэтому перезапу�
 
 ```ts
 // lib/scope.svelte.ts
-import { Scope, type ScopeOptions } from 'scopekit/scope';
-import { isAbort } from 'scopekit/signal';
+import { Scope, type ScopeOptions } from '@scopekit/core/scope';
+import { isAbort } from '@scopekit/core/signal';
 
 export function scopedEffect(effect: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions) {
   $effect(() => {
@@ -69,7 +69,7 @@ export function scopedEffect(effect: (scope: Scope) => void | Promise<void>, opt
 
 ```svelte
 <script lang="ts">
-  import { latest } from 'scopekit/latest';
+  import { latest } from '@scopekit/core/latest';
   let query = $state('');
   let results = $state<Item[]>([]);
   const search = latest((q: string, signal) => http.get<Item[]>('/search', { signal, query: { q } }));
@@ -89,7 +89,7 @@ Svelte 4 со сторами: та же логика в `onMount`, возвра�
 
 ```ts
 import { createSignal, createEffect, onCleanup, createResource } from 'solid-js';
-import { Scope } from 'scopekit/scope';
+import { Scope } from '@scopekit/core/scope';
 
 export function createScope(opts?: ScopeOptions) {
   const scope = new Scope(opts);
@@ -140,7 +140,7 @@ scopedEffect(async scope => {
 
 ```ts
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
-import { Scope } from 'scopekit/scope';
+import { Scope } from '@scopekit/core/scope';
 
 export function injectScope(opts?: ScopeOptions): Scope {
   const scope = new Scope(opts);

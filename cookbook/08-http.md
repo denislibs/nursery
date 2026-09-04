@@ -1,7 +1,7 @@
 # HTTP-клиент
 
 ```ts
-import { createHttp, HttpError } from 'scopekit/http';
+import { createHttp, HttpError } from '@scopekit/core/http';
 ```
 
 ## Клиент на приложение

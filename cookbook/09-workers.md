@@ -1,15 +1,15 @@
 # Воркеры
 
 ```ts
-import { expose } from 'scopekit/worker';                    // в воркере
-import { wrap, type Remote, type Endpoint } from 'scopekit/worker';   // в главном потоке
+import { expose } from '@scopekit/core/worker';                    // в воркере
+import { wrap, type Remote, type Endpoint } from '@scopekit/core/worker';   // в главном потоке
 ```
 
 ## Минимальный пример
 
 ```ts
 // parser.worker.ts
-import { expose } from 'scopekit/worker';
+import { expose } from '@scopekit/core/worker';
 
 export const api = {
   async parse(src: string, opts: { signal: AbortSignal }) {
@@ -22,7 +22,7 @@ expose(api);
 
 ```ts
 // main.ts
-import { wrap } from 'scopekit/worker';
+import { wrap } from '@scopekit/core/worker';
 import type { api } from './parser.worker.js';
 
 const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
@@ -158,7 +158,7 @@ remote[Symbol.dispose](); stop(); port1.close(); port2.close();
 ## transfer: перемещать буферы вместо копирования
 
 ```ts
-import { transfer } from 'scopekit/worker';
+import { transfer } from '@scopekit/core/worker';
 
 const pixels = new Uint8ClampedArray(w * h * 4);
 const out = await remote.blur(transfer({ pixels, w, h }, [pixels.buffer]), { signal });
@@ -176,7 +176,7 @@ export const api = {
 ## callback: прогресс и вопросы из воркера
 
 ```ts
-import { callback } from 'scopekit/worker';
+import { callback } from '@scopekit/core/worker';
 
 await remote.index(files, {
   signal,
@@ -192,7 +192,7 @@ await remote.index(files, {
 ## Пул воркеров
 
 ```ts
-import { createPool } from 'scopekit/worker';
+import { createPool } from '@scopekit/core/worker';
 
 const pool = createPool<typeof api>(
   () => new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' }),

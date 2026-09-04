@@ -23,8 +23,12 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm run check:cookbook
       - run: npm run test:node
       - run: npm run build
+      - run: npm run check:types-consumer
+      - run: npm run check:pkg
+      - run: npm run size
 
   browser:
     name: browser tests (chromium)

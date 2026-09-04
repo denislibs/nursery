@@ -4,5 +4,11 @@
   "singleQuote": true,
   "arrowParens": "avoid",
   "trailingComma": "all",
-  "ignorePatterns": ["dist/", "node_modules/", "cookbook/", "coverage/"]
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "cookbook/",
+    "coverage/",
+    "packages/*/dist/"
+  ]
 }

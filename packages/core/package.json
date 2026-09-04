@@ -1,0 +1,97 @@
+{
+  "name": "@scopekit/core",
+  "version": "1.0.0-rc.1",
+  "description": "Structured concurrency, cancellation and async utilities for the browser, built on AbortSignal, Promise and AsyncIterable.",
+  "keywords": [
+    "abortsignal",
+    "async",
+    "async-iterable",
+    "cancellation",
+    "fetch",
+    "promise",
+    "scheduler",
+    "structured-concurrency",
+    "worker"
+  ],
+  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "bugs": {
+    "url": "https://github.com/denislibs/scopekit/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denislibs/scopekit.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "import": "./dist/diagnostics.js"
+    },
+    "./signal": {
+      "types": "./dist/signal.d.ts",
+      "import": "./dist/signal.js"
+    },
+    "./combine": {
+      "types": "./dist/combine.d.ts",
+      "import": "./dist/combine.js"
+    },
+    "./limit": {
+      "types": "./dist/limit.d.ts",
+      "import": "./dist/limit.js"
+    },
+    "./latest": {
+      "types": "./dist/latest.d.ts",
+      "import": "./dist/latest.js"
+    },
+    "./scope": {
+      "types": "./dist/scope.d.ts",
+      "import": "./dist/scope.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "import": "./dist/events.js"
+    },
+    "./iter": {
+      "types": "./dist/iter.d.ts",
+      "import": "./dist/iter.js"
+    },
+    "./schedule": {
+      "types": "./dist/schedule.d.ts",
+      "import": "./dist/schedule.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/postbuild.mjs core",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

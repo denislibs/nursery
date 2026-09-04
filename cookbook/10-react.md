@@ -1,10 +1,10 @@
 # React
 
-Хуки поставляются как `scopekit/react`. Идея одна: **скоуп живёт столько же, сколько эффект**,
+Хуки поставляются как `@scopekit/react`. Идея одна: **скоуп живёт столько же, сколько эффект**,
 всё остальное надстройки.
 
 ```ts
-import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEventStream, useWorker } from 'scopekit/react';
+import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEventStream, useWorker } from '@scopekit/react';
 ```
 
 | Хук | Что делает |

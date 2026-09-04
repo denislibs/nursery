@@ -1,10 +1,10 @@
 # Scope: структурная конкурентность
 
-`Scope` из `scopekit/scope` это «владелец» группы задач. У него один `AbortSignal`, один
+`Scope` из `@scopekit/core/scope` это «владелец» группы задач. У него один `AbortSignal`, один
 контекст, список детей и гарантия: **когда скоуп закрыт, ничего из него больше не работает**.
 
 ```ts
-import { Scope, contextKey } from 'scopekit/scope';
+import { Scope, contextKey } from '@scopekit/core/scope';
 ```
 
 ## Базовый сценарий: экран загружает несколько вещей
@@ -57,7 +57,7 @@ await Scope.run(async scope => {
 ```
 
 Если fail-fast не нужен и все задачи должны дойти до конца, используйте `mapSettled` из
-`scopekit/limit` или ловите ошибки внутри самой задачи.
+`@scopekit/core/limit` или ловите ошибки внутри самой задачи.
 
 ## Отмена не считается ошибкой
 

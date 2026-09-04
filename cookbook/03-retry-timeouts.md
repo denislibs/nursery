@@ -1,7 +1,7 @@
 # Retry и таймауты
 
 ```ts
-import { withTimeout, retry, race } from 'scopekit/combine';
+import { withTimeout, retry, race } from '@scopekit/core/combine';
 ```
 
 ## Таймаут на операцию
@@ -77,7 +77,7 @@ await retry(sig => api.create(payload, sig), {
 });
 ```
 
-`scopekit/http` делает ровно это из коробки, см. [08-http.md](08-http.md).
+`@scopekit/core/http` делает ровно это из коробки, см. [08-http.md](08-http.md).
 
 ## Идемпотентность
 

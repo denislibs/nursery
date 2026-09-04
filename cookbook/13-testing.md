@@ -169,7 +169,7 @@ Node эмулирует `AbortSignal`, `DOMException`, `Response`, `MessageChann
 Хелперы, которые иначе приходится писать в каждом проекте:
 
 ```ts
-import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from 'scopekit/testing';
+import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from '@scopekit/core/testing';
 
 const f = fakeFetch({
   'GET /users/:id': ({ params }) => ({ id: params.id }),               // объект → JSON 200

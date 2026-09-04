@@ -21,15 +21,15 @@
 
 | | Файл | О чём |
 |---|---|---|
-| 10 | [10-react.md](10-react.md) | `scopekit/react`: `useScopedEffect`, `useAsync`, `useLatest`, `ScopeProvider`, Router, TanStack Query, Suspense |
-| 11 | [11-vue.md](11-vue.md) | `scopekit/vue`: `useScope`, `useScopedWatch`, `useAsync`, Pinia, Nuxt |
-| 12 | [12-svelte-solid-angular.md](12-svelte-solid-angular.md) | `scopekit/svelte`, `scopekit/solid`, `scopekit/angular`, Web Components, мост в RxJS |
+| 10 | [10-react.md](10-react.md) | `@scopekit/react`: `useScopedEffect`, `useAsync`, `useLatest`, `ScopeProvider`, Router, TanStack Query, Suspense |
+| 11 | [11-vue.md](11-vue.md) | `@scopekit/vue`: `useScope`, `useScopedWatch`, `useAsync`, Pinia, Nuxt |
+| 12 | [12-svelte-solid-angular.md](12-svelte-solid-angular.md) | `@scopekit/svelte`, `@scopekit/solid`, `@scopekit/angular`, Web Components, мост в RxJS |
 
 ## Практика
 
 | | Файл | О чём |
 |---|---|---|
-| 13 | [13-testing.md](13-testing.md) | `scopekit/testing`, фейковые таймеры, проверка отмены, http без сети, воркеры в Node |
+| 13 | [13-testing.md](13-testing.md) | `@scopekit/core/testing`, фейковые таймеры, проверка отмены, http без сети, воркеры в Node |
 | 14 | [14-migration.md](14-migration.md) | RxJS, p-*, axios/ky, Comlink, голый AbortController, TanStack Query |
 | 15 | [15-antipatterns.md](15-antipatterns.md) | что не делать и почему |
 | 16 | [16-observability.md](16-observability.md) | имена задач, `dump()`, `Scope.onUnhandled`, grace, дедлайн |
@@ -38,5 +38,5 @@
 
 - `http` это клиент из `createHttp`, `scope` это текущий `Scope`, `signal` это `scope.signal`.
 - `ignoreAbort` это хелпер из [01-cancellation.md](01-cancellation.md): `err => { if (!isAbort(err)) throw err; }`.
-- Импорты указаны в начале каждого файла. Все subpath-экспорты (`scopekit/scope` и т. д.)
-  доступны и через корень `scopekit`.
+- Импорты указаны в начале каждого файла. Все subpath-экспорты (`@scopekit/core/scope` и т. д.)
+  доступны и через корень `@scopekit/core`.

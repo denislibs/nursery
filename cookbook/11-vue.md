@@ -1,9 +1,9 @@
 # Vue 3
 
-Композаблы поставляются как `scopekit/vue`.
+Композаблы поставляются как `@scopekit/vue`.
 
 ```ts
-import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorker } from 'scopekit/vue';
+import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorker } from '@scopekit/vue';
 ```
 
 | Композабл | Что делает |

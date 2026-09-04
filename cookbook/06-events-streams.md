@@ -1,8 +1,8 @@
 # События как потоки
 
 ```ts
-import { on, Channel } from 'scopekit/events';
-import { pipe, map, filter, take, buffer, debounce, throttle, toArray } from 'scopekit/iter';
+import { on, Channel } from '@scopekit/core/events';
+import { pipe, map, filter, take, buffer, debounce, throttle, toArray } from '@scopekit/core/iter';
 ```
 
 ## on: события в цикле for-await
@@ -173,7 +173,7 @@ for await (const msg of pipe(messages(ws, scope.signal), filter(isChatMessage)))
 ## Дополнительные операторы
 
 ```ts
-import { distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from 'scopekit/iter';
+import { distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from '@scopekit/core/iter';
 ```
 
 | Оператор | Что делает |
@@ -206,7 +206,7 @@ const all = pipe(merge(messages(wsA, signal), messages(wsB, signal)), timeout(30
 ## select: первый из нескольких каналов
 
 ```ts
-import { select } from 'scopekit/events';
+import { select } from '@scopekit/core/events';
 
 for (;;) {
   const r = await select([jobs, controls], signal);
@@ -221,7 +221,7 @@ for (;;) {
 ## zip, combineLatest, share
 
 ```ts
-import { zip, combineLatest, share } from 'scopekit/iter';
+import { zip, combineLatest, share } from '@scopekit/core/iter';
 
 for await (const [tick, price] of zip(ticks, prices)) plot(tick, price);       // по позиции
 for await (const [size, theme] of combineLatest(sizes, themes)) relayout(size, theme); // последнее из каждого

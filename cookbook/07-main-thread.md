@@ -1,7 +1,7 @@
 # Главный поток: не блокировать ввод
 
 ```ts
-import { yieldToMain, chunked, idle, frame } from 'scopekit/schedule';
+import { yieldToMain, chunked, idle, frame } from '@scopekit/core/schedule';
 ```
 
 ## Тяжёлый цикл
@@ -97,7 +97,7 @@ React, Vue и остальные батчат обновления. Вызов `
 ## postTask: приоритеты
 
 ```ts
-import { postTask } from 'scopekit/schedule';
+import { postTask } from '@scopekit/core/schedule';
 
 await postTask(() => renderVisibleRows(), { priority: 'user-blocking', signal });
 await postTask(() => warmCache(), { priority: 'background', signal, delay: 500 });

@@ -1,10 +1,10 @@
 # Отмена: сигналы, таймауты, sleep
 
 Всё в scopekit держится на одном правиле: **любая async-функция, которая ждёт сеть, таймер
-или событие, принимает `AbortSignal`**. Этот файл о примитивах из `scopekit/signal`.
+или событие, принимает `AbortSignal`**. Этот файл о примитивах из `@scopekit/core/signal`.
 
 ```ts
-import { sleep, isAbort, anySignal, timeoutSignal, throwIfAborted, abortError } from 'scopekit/signal';
+import { sleep, isAbort, anySignal, timeoutSignal, throwIfAborted, abortError } from '@scopekit/core/signal';
 ```
 
 ## Отменяемая задержка
@@ -93,7 +93,7 @@ try {
 и снимайте связь явно:
 
 ```ts
-import { linkSignals } from 'scopekit/signal';
+import { linkSignals } from '@scopekit/core/signal';
 
 async function withRequestSignal<T>(parent: AbortSignal, fn: (s: AbortSignal) => Promise<T>) {
   const link = linkSignals([parent, timeoutSignal(10_000)]);

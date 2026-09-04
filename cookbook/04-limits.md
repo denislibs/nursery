@@ -1,7 +1,7 @@
 # Лимиты конкурентности
 
 ```ts
-import { Semaphore, Mutex, map, mapSettled, Queue } from 'scopekit/limit';
+import { Semaphore, Mutex, map, mapSettled, Queue } from '@scopekit/core/limit';
 ```
 
 ## map: обработать список с ограничением

@@ -1,7 +1,7 @@
 # Гонки состояния: latest и singleFlight
 
 ```ts
-import { latest, singleFlight } from 'scopekit/latest';
+import { latest, singleFlight } from '@scopekit/core/latest';
 ```
 
 ## Проблема
@@ -102,7 +102,7 @@ const p = loadMe();
 ```
 
 Нужна отмена общего запроса, когда ушли **все** подписчики? Так работает дедупликация в
-`scopekit/http`: там считаются подписчики и общий `fetch` абортится на нулевом счётчике.
+`@scopekit/core/http`: там считаются подписчики и общий `fetch` абортится на нулевом счётчике.
 
 ## Ещё один вариант гонки: «сохранить, потом перечитать»
 
@@ -127,7 +127,7 @@ saveButton.onclick = () => saves.add(sig => api.save(form.value, sig));
 ## latestBy: последний по ключу
 
 ```ts
-import { latestBy } from 'scopekit/latest';
+import { latestBy } from '@scopekit/core/latest';
 
 const loadDetail = latestBy((id: string) => id, (id, signal) => api.detail(id, signal));
 

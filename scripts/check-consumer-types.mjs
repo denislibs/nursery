@@ -6,13 +6,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const root = resolve(import.meta.dirname, '..');
+const repo = resolve(import.meta.dirname, '..');
+const root = join(repo, 'packages', 'core');
 const pkg = JSON.parse(readFile('package.json'));
 const name = pkg.name;
 const dir = mkdtempSync(join(tmpdir(), 'scopekit-types-'));
 mkdirSync(join(dir, 'node_modules', '@types'), { recursive: true });
 rmSync(join(dir, 'node_modules', '@types'), { recursive: true });
-symlinkSync(join(root, 'node_modules', '@types'), join(dir, 'node_modules', '@types'), 'dir');
+symlinkSync(join(repo, 'node_modules', '@types'), join(dir, 'node_modules', '@types'), 'dir');
 const target = name.startsWith('@')
   ? join(dir, 'node_modules', name.split('/')[0])
   : join(dir, 'node_modules');
@@ -57,7 +58,7 @@ for (const [file, code] of Object.entries(cases)) {
       files: [file],
     }),
   );
-  const r = spawnSync(join(root, 'node_modules', '.bin', 'tsc'), ['-p', 'tsconfig.json'], {
+  const r = spawnSync(join(repo, 'node_modules', '.bin', 'tsc'), ['-p', 'tsconfig.json'], {
     cwd: dir,
     encoding: 'utf8',
   });
