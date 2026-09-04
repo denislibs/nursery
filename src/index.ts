@@ -12,3 +12,5 @@ export { on, Channel, ChannelClosedError } from './events.js';
 export type { OnOptions } from './events.js';
 export * as iter from './iter.js';
 export type { Op, BufferSpec } from './iter.js';
+export { yieldToMain, idle, frame, chunked } from './schedule.js';
+export type { IdleOptions, ChunkedOptions } from './schedule.js';
