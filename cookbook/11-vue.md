@@ -1,0 +1,197 @@
+# Vue 3
+
+Аналог React-эффекта во Vue это `watchEffect` с `onCleanup`, либо `onScopeDispose` для
+композаблов. Скоуп scopekit привязывается к ним.
+
+```ts
+import { ref, watch, watchEffect, onScopeDispose, shallowRef, type Ref } from 'vue';
+import { Scope, type ScopeOptions } from 'scopekit/scope';
+import { latest } from 'scopekit/latest';
+import { isAbort } from 'scopekit/signal';
+```
+
+## useScope: скоуп на компонент
+
+```ts
+export function useScope(opts?: ScopeOptions): Scope {
+  const scope = new Scope(opts);
+  onScopeDispose(() => { void scope.close(); });
+  return scope;
+}
+```
+
+```vue
+<script setup lang="ts">
+const scope = useScope();
+const user = shallowRef<User | null>(null);
+
+http.get<User>('/me', { signal: scope.signal }).then(u => (user.value = u)).catch(ignoreAbort);
+</script>
+```
+
+## useScopedWatch: перезапуск при изменении зависимостей
+
+```ts
+export function useScopedWatch(effect: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions) {
+  watchEffect(onCleanup => {
+    const scope = new Scope(opts);
+    onCleanup(() => { void scope.close(); });
+    Promise.resolve(effect(scope)).catch(err => { if (!isAbort(err)) console.error(err); });
+  });
+}
+```
+
+Внимание: реактивные зависимости собираются только из синхронной части `effect`. Читайте
+`props.id` до первого `await`:
+
+```ts
+const props = defineProps<{ id: string }>();
+const user = shallowRef<User | null>(null);
+
+useScopedWatch(async scope => {
+  const id = props.id;                       // синхронно, попадёт в зависимости
+  user.value = await http.get<User>(`/users/${id}`, { signal: scope.signal });
+});
+```
+
+## useAsync
+
+```ts
+export function useAsync<T>(fn: (scope: Scope) => Promise<T>) {
+  const data = shallowRef<T | null>(null);
+  const error = shallowRef<unknown>(null);
+  const loading = ref(false);
+
+  useScopedWatch(async scope => {
+    loading.value = true;
+    error.value = null;
+    try {
+      data.value = await fn(scope);
+    } catch (e) {
+      if (!isAbort(e)) error.value = e;
+    } finally {
+      if (!scope.signal.aborted) loading.value = false;
+    }
+  });
+
+  return { data, error, loading };
+}
+```
+
+```vue
+<script setup lang="ts">
+const props = defineProps<{ userId: string }>();
+const { data: orders, loading } = useAsync(scope =>
+  http.get<Order[]>('/orders', { signal: scope.signal, query: { userId: props.userId } }),
+);
+</script>
+```
+
+## Поиск без гонок
+
+```ts
+export function useLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>) {
+  const run = latest(fn);
+  const pending = ref(false);
+  onScopeDispose(() => run.cancel());
+  const call = async (arg: A) => {
+    pending.value = true;
+    try {
+      return await run(arg);
+    } finally {
+      pending.value = run.pending;
+    }
+  };
+  return { call, pending };
+}
+```
+
+```vue
+<script setup lang="ts">
+const query = ref('');
+const results = shallowRef<Item[]>([]);
+const { call: search, pending } = useLatest((q: string, signal) => http.get<Item[]>('/search', { signal, query: { q } }));
+
+watch(query, q => { search(q).then(r => (results.value = r)).catch(ignoreAbort); });
+</script>
+
+<template>
+  <input v-model="query" />
+  <Spinner v-if="pending" />
+  <List :items="results" />
+</template>
+```
+
+Debounce через `iter`, если хочется потоком:
+
+```ts
+const scope = useScope();
+const queries = new Channel<string>(50);
+watch(query, q => void queries.send(q));
+scope.spawn(async sig => {
+  for await (const q of pipe(queries, debounce(250))) {
+    results.value = await search(q).catch(() => results.value);
+  }
+});
+scope.defer(() => queries.close());
+```
+
+## События DOM через on()
+
+```ts
+const el = ref<HTMLElement | null>(null);
+const scope = useScope();
+
+watch(el, (node, _old, onCleanup) => {
+  if (!node) return;
+  const child = scope.child();
+  onCleanup(() => void child.close());
+  child.spawn(async sig => {
+    for await (const e of on<PointerEvent>(node, 'pointermove', { signal: sig, buffer: 1 })) draw(e);
+  });
+});
+```
+
+## Pinia store с отменой
+
+Долгоживущие сторы держат корневой скоуп, действия порождают дочерние:
+
+```ts
+export const useCatalog = defineStore('catalog', () => {
+  const scope = new Scope();
+  const items = shallowRef<Item[]>([]);
+  const reload = latest((_: void, signal) => http.get<Item[]>('/items', { signal }));
+
+  async function refresh() {
+    items.value = await reload(undefined, scope.signal);
+  }
+
+  function dispose() { void scope.close(); }
+  return { items, refresh, dispose };
+});
+```
+
+## Воркер
+
+```ts
+export function useWorker<T>(factory: () => Worker) {
+  const worker = factory();
+  const api = wrap<T>(worker);
+  onScopeDispose(() => { api[Symbol.dispose](); worker.terminate(); });
+  return api;
+}
+```
+
+## Nuxt useAsyncData
+
+`useAsyncData` не передаёт сигнал, но даёт `onCancel`? Нет, в текущих версиях нет.
+Оборачивайте вручную:
+
+```ts
+const { data } = await useAsyncData('user', () =>
+  Scope.run(async scope => http.get<User>('/me', { signal: scope.signal }), { timeout: 10_000 }),
+);
+```
+
+На сервере скоуп закроется после `run`, на клиенте тоже. Отмена при уходе со страницы
+здесь не сработает, `useAsyncData` её не поддерживает.

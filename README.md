@@ -9,6 +9,8 @@
 Компилятор: TypeScript 7 (нативный, на Go). `tsc` из пакета `typescript@7.0.2` — это
 платформенный бинарник из `@typescript/typescript-<os>-<arch>`, не JS.
 
+Рецепты по темам и фреймворкам: [cookbook/](cookbook/README.md).
+
 ## Импорт
 
 Корневой вход `scopekit` реэкспортирует всё. Каждый модуль доступен и как subpath, это
