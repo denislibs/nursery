@@ -1,0 +1,30 @@
+{
+  "name": "scopekit",
+  "version": "0.1.0",
+  "description": "Structured concurrency, cancellation and concurrency-limit utilities for the browser",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}
