@@ -38,7 +38,7 @@ import { createHttp } from '@scopekit/core/http';
 | `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError`, `ScopeStuckError` |
 | `events` | `on`, `Channel` (+ `trySend`, `tryReceive`), `select`, `ChannelClosedError` |
 | `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `zip`, `combineLatest`, `share`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
-| `schedule` | `yieldToMain`, `postTask`, `idle`, `frame`, `chunked` |
+| `schedule` | `yieldToMain`, `postTask`, `idle`, `frame`, `frameInterval`, `chunked` (бюджет по частоте экрана) |
 | `http` | `createHttp`, `HttpError` |
 | `worker` | `expose`, `wrap`, `transfer`, `callback`, `createPool` |
 | `testing` | `fakeFetch`, `jsonResponse`, `streamResponse`, `textStream`, `tick`, `settle`, `expectAborted`, `fakeClock`, `portPair`, `mockWorker` |
@@ -145,7 +145,7 @@ iter.pipe(source, iter.filter(ok), iter.map(parse), iter.buffer({ ms: 100 }), it
 ## Главный поток
 
 ```ts
-for await (const row of chunked(rows, { budget: 8, signal })) process(row); // yield каждые ~8 мс работы
+for await (const row of chunked(rows, { signal })) process(row); // yield каждые полкадра работы
 await yieldToMain();   // scheduler.yield() или macrotask через MessageChannel
 await idle({ timeout: 1000 });
 await frame();

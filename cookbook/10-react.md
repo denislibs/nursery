@@ -152,7 +152,7 @@ function BigTable({ rows }: { rows: Row[] }) {
   const [rendered, setRendered] = useState<Row[]>([]);
   useScopedEffect(async scope => {
     const acc: Row[] = [];
-    for await (const row of chunked(rows, { budget: 6, signal: scope.signal })) {
+    for await (const row of chunked(rows, { signal: scope.signal })) {
       acc.push(enrich(row));
       if (acc.length % 200 === 0) setRendered([...acc]);   // прогрессивный рендер
     }

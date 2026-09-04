@@ -34,7 +34,15 @@ export { on, Channel, ChannelClosedError, select } from './events.js';
 export type { OnOptions, SelectResult, AnyChannel } from './events.js';
 export * as iter from './iter.js';
 export type { Op, BufferSpec, FlatMapOptions, ShareOptions } from './iter.js';
-export { yieldToMain, idle, frame, chunked, postTask } from './schedule.js';
+export {
+  yieldToMain,
+  idle,
+  frame,
+  chunked,
+  postTask,
+  frameInterval,
+  resetFrameInterval,
+} from './schedule.js';
 export type { IdleOptions, ChunkedOptions, PostTaskOptions, TaskPriority } from './schedule.js';
 export { createHttp, HttpError } from './http.js';
 export type {

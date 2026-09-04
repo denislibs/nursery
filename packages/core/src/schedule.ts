@@ -4,6 +4,7 @@ import { abortError, throwIfAborted, type MaybeSignal } from './signal.js';
 export type TaskPriority = 'user-blocking' | 'user-visible' | 'background';
 
 type G = typeof globalThis & {
+  navigator?: { scheduling?: { isInputPending?: () => boolean } };
   scheduler?: {
     yield?: () => Promise<void>;
     postTask?: <T>(
@@ -158,26 +159,80 @@ export function frame(signal?: MaybeSignal): Promise<number> {
   });
 }
 
+const FALLBACK_FRAME_MS = 1000 / 60;
+const FRAME_SAMPLES = 6;
+const FRAME_CACHE_TTL = 5000;
+let frameCache: { value: number; at: number } | undefined;
+let frameMeasurement: Promise<number> | undefined;
+
+/**
+ * Measured interval between animation frames in ms: ~16.7 on 60 Hz, ~8.3 on 120 Hz. The
+ * median of a few frames, cached for a few seconds (the tab may move to another display).
+ * Falls back to 60 Hz where requestAnimationFrame is unavailable or the page is hidden.
+ */
+export function frameInterval(): Promise<number> {
+  if (frameCache && performance.now() - frameCache.at < FRAME_CACHE_TTL)
+    return Promise.resolve(frameCache.value);
+  frameMeasurement ??= measureFrameInterval().then(value => {
+    frameCache = { value, at: performance.now() };
+    frameMeasurement = undefined;
+    return value;
+  });
+  return frameMeasurement;
+}
+
+/** Drops the cached measurement (tests, or after a known display change). */
+export function resetFrameInterval(): void {
+  frameCache = undefined;
+  frameMeasurement = undefined;
+}
+
+async function measureFrameInterval(): Promise<number> {
+  const raf = g.requestAnimationFrame;
+  if (!raf || (typeof document !== 'undefined' && document.hidden)) return FALLBACK_FRAME_MS;
+  const stamps: number[] = [];
+  const timeout = new Promise<'timeout'>(r => setTimeout(() => r('timeout'), 1000));
+  const frames = (async () => {
+    for (let i = 0; i < FRAME_SAMPLES; i++) stamps.push(await new Promise<number>(r => raf(r)));
+    return 'done' as const;
+  })();
+  if ((await Promise.race([frames, timeout])) === 'timeout' || stamps.length < 3) return FALLBACK_FRAME_MS;
+  const deltas = stamps
+    .slice(1)
+    .map((t, i) => t - stamps[i]!)
+    .toSorted((a, b) => a - b);
+  const median = deltas[Math.floor(deltas.length / 2)]!;
+  return median > 0 && median < 200 ? median : FALLBACK_FRAME_MS;
+}
+
 export interface ChunkedOptions {
-  /** Main-thread time budget in ms between yields. Default 8 (about half a 60fps frame). */
-  budget?: number;
+  /**
+   * Main-thread time budget in ms between yields, or 'auto' (default): half of the measured
+   * frame interval, so a 120 Hz display gets ~4 ms and a 60 Hz one ~8 ms.
+   */
+  budget?: number | 'auto';
   signal?: MaybeSignal;
 }
 
 /**
  * Iterates `items` and yields to the main thread whenever the consumer has used up `budget` ms
- * since the last yield. Drop-in for a heavy synchronous loop:
+ * since the last yield, or sooner when the browser reports pending input. Drop-in for a heavy
+ * synchronous loop:
  *   for await (const row of chunked(rows)) process(row);
  */
 export async function* chunked<T>(
   items: Iterable<T> | AsyncIterable<T>,
   opts: ChunkedOptions = {},
 ): AsyncGenerator<T, void, undefined> {
-  const { budget = 8, signal } = opts;
+  const { signal } = opts;
+  const budget =
+    opts.budget === undefined || opts.budget === 'auto' ? (await frameInterval()) / 2 : opts.budget;
+  const scheduling = g.navigator?.scheduling;
   let start = performance.now();
   for await (const item of items) {
     throwIfAborted(signal);
-    if (performance.now() - start >= budget) {
+    // called as a method: native isInputPending throws when invoked unbound
+    if (performance.now() - start >= budget || scheduling?.isInputPending?.() === true) {
       await yieldToMain(signal);
       start = performance.now();
     }

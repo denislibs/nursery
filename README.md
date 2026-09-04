@@ -83,7 +83,7 @@ render(await user, await posts);
 | `scope` | `Scope`, `contextKey`, `ScopeClosedError`, `ScopeStuckError` |
 | `events` | `on` (typed by event map), `Channel` (Go-style, backpressure, `select`, `trySend`/`tryReceive`) |
 | `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `zip`, `combineLatest`, `share`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` |
-| `schedule` | `yieldToMain`, `postTask` (priorities), `idle`, `frame`, `chunked` |
+| `schedule` | `yieldToMain`, `postTask` (priorities), `idle`, `frame`, `frameInterval`, `chunked` (auto budget from the display refresh rate) |
 | `http` | `createHttp`: required owner (`signal` or `scope`), per-attempt timeout, deadline, retry with `Retry-After`, GET dedupe, hooks, schema `parse`, progress, `stream` (NDJSON), `sse` with reconnect |
 | `worker` | `expose`, `wrap`, `transfer`, `callback`, `createPool`; `AbortSignal` reaches the worker |
 | `diagnostics` | `onWarning` for backlog warnings |
@@ -102,7 +102,7 @@ for await (const e of pipe(on(input, 'input', { signal: scope.signal }), debounc
 const thumbs = await map(files, (f, _i, sig) => makeThumb(f, sig), { concurrency: 4, signal: scope.signal });
 
 // heavy loop that keeps the UI responsive
-for await (const row of chunked(rows, { budget: 8, signal })) table.append(renderRow(row));
+for await (const row of chunked(rows, { signal })) table.append(renderRow(row));
 
 // worker calls that can be cancelled and report progress
 const ast = await parser.parse(src, { signal, onProgress: callback(setProgress) });
