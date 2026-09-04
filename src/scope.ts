@@ -97,18 +97,14 @@ export class Scope implements AsyncDisposable {
 
   /** Reads a context value: own bindings first, then ancestors, then the key default. */
   get<T>(key: ContextKey<T>): T {
-    for (let s: Scope | undefined = this; s; s = s.#parent) {
-      if (s.#bindings.has(key)) return s.#bindings.get(key) as T;
-    }
+    if (this.#bindings.has(key)) return this.#bindings.get(key) as T;
+    if (this.#parent) return this.#parent.get(key);
     return key.defaultValue as T;
   }
 
   /** True if the key is bound explicitly in this scope or an ancestor. */
   has(key: ContextKey<unknown>): boolean {
-    for (let s: Scope | undefined = this; s; s = s.#parent) {
-      if (s.#bindings.has(key)) return true;
-    }
-    return false;
+    return this.#bindings.has(key) || (this.#parent?.has(key) ?? false);
   }
 
   /** Runs `task` with this scope's signal. Failure aborts the siblings. */
@@ -149,7 +145,7 @@ export class Scope implements AsyncDisposable {
   /** Resolves once every spawned child has settled (does not abort anything). */
   async settled(): Promise<void> {
     while (this.#children.size > 0) {
-      await Promise.allSettled([...this.#children]);
+      await Promise.allSettled(this.#children);
     }
   }
 

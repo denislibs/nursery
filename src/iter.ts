@@ -84,7 +84,7 @@ export function buffer<T>(spec: BufferSpec): Op<T, T[]> {
           flush();
           sink.end();
         },
-        error: sink.fail,
+        error: err => sink.fail(err),
       });
       return () => {
         clearTimeout(timer);
@@ -118,7 +118,7 @@ export function debounce<T>(ms: number): Op<T, T> {
           fire();
           sink.end();
         },
-        error: sink.fail,
+        error: err => sink.fail(err),
       });
       return () => {
         clearTimeout(timer);
@@ -158,7 +158,7 @@ export function throttle<T>(ms: number): Op<T, T> {
           if (trailing) sink.emit(trailing.value);
           sink.end();
         },
-        error: sink.fail,
+        error: err => sink.fail(err),
       });
       return () => {
         clearTimeout(timer);
@@ -251,9 +251,10 @@ interface Consumer<T> {
 function consume<T>(src: AsyncIterable<T>, c: Consumer<T>): () => void {
   const it = src[Symbol.asyncIterator]();
   let stopped = false;
-  (async () => {
+  void (async () => {
     try {
-      while (!stopped) {
+      for (;;) {
+        if (stopped) break;
         const r = await it.next();
         if (stopped) break;
         if (r.done) {

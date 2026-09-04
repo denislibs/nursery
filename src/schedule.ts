@@ -17,11 +17,12 @@ function macrotask(): Promise<void> {
   if (typeof MessageChannel === 'undefined') return new Promise(r => setTimeout(r, 0));
   if (!channel) {
     channel = new MessageChannel();
-    channel.port1.onmessage = () => {
+    channel.port1.addEventListener('message', () => {
       const waiters = macrotaskWaiters;
       macrotaskWaiters = [];
       for (const w of waiters) w();
-    };
+    });
+    channel.port1.start();
     // Node keeps the loop alive for open ports; browsers have no unref.
     (channel.port1 as unknown as { unref?: () => void }).unref?.();
     (channel.port2 as unknown as { unref?: () => void }).unref?.();

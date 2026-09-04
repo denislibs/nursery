@@ -92,14 +92,18 @@ function injectSignals(args: unknown[], signals: AbortSignal[]): unknown[] {
 function cloneableReason(reason: unknown): unknown {
   if (reason instanceof Error) return serializeError(reason);
   if (reason === undefined || reason === null || typeof reason !== 'object') return reason;
-  return String(reason);
+  try {
+    return JSON.parse(JSON.stringify(reason)) as unknown;
+  } catch {
+    return abortError().message;
+  }
 }
 
 /**
  * Worker side. Exposes `api` on the endpoint (defaults to the worker global scope).
  * Every AbortSignal the caller passes arrives as a live AbortSignal here.
  */
-export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalThis as unknown as Endpoint): () => void {
+export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalThis): () => void {
   const running = new Map<number, AbortController[]>();
   const post = (msg: OkMsg | ErrMsg) => {
     try {
@@ -108,7 +112,7 @@ export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalTh
       endpoint.postMessage({ t: 'err', id: msg.id, error: serializeError(err) } satisfies ErrMsg);
     }
   };
-  const onMessage = async (ev: MessageEvent) => {
+  const handle = async (ev: MessageEvent) => {
     const msg = ev.data as Msg;
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'abort') {
@@ -130,6 +134,9 @@ export function expose(api: Record<string, AnyFn>, endpoint: Endpoint = globalTh
     } finally {
       running.delete(msg.id);
     }
+  };
+  const onMessage = (ev: MessageEvent) => {
+    void handle(ev);
   };
   endpoint.addEventListener('message', onMessage);
   endpoint.start?.();

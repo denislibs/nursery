@@ -1,5 +1,5 @@
 import { retry, type RetryOptions } from './combine.js';
-import { abortError, type MaybeSignal } from './signal.js';
+import { abortError } from './signal.js';
 
 export type Query = Record<string, string | number | boolean | null | undefined>;
 
@@ -97,21 +97,6 @@ export function createHttp(options: HttpOptions = {}): Http {
       for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null) u.searchParams.append(k, String(v));
     }
     return u.href;
-  }
-
-  function encodeBody(body: unknown, headers: Headers): BodyInit | undefined {
-    if (body === undefined || body === null) return undefined;
-    const passthrough =
-      typeof body === 'string' ||
-      body instanceof FormData ||
-      body instanceof URLSearchParams ||
-      body instanceof Blob ||
-      body instanceof ArrayBuffer ||
-      ArrayBuffer.isView(body) ||
-      (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream);
-    if (passthrough) return body as BodyInit;
-    if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-    return JSON.stringify(body);
   }
 
   async function performOnce(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
@@ -216,6 +201,21 @@ export function createHttp(options: HttpOptions = {}): Http {
     patch: (url, opts) => parsed(url, { ...opts, method: 'PATCH' }),
     delete: (url, opts) => parsed(url, { ...opts, method: 'DELETE' }),
   };
+}
+
+function encodeBody(body: unknown, headers: Headers): BodyInit | undefined {
+  if (body === undefined || body === null) return undefined;
+  const passthrough =
+    typeof body === 'string' ||
+    body instanceof FormData ||
+    body instanceof URLSearchParams ||
+    body instanceof Blob ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body) ||
+    (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream);
+  if (passthrough) return body as BodyInit;
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  return JSON.stringify(body);
 }
 
 async function parseBody(res: Response): Promise<unknown> {

@@ -6,14 +6,21 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "lint": "oxlint src test",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "check": "npm run typecheck && npm test && npm run build"
+    "test:node": "vitest run --project node",
+    "test:browser": "vitest run --project browser",
+    "test:watch": "vitest --project node",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "license": "MIT",
   "devDependencies": {
+    "@vitest/browser-playwright": "^5.0.0",
+    "oxlint": "^1.81.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "playwright": "^1.62.1",
     "typescript": "7.0.2",
     "vitest": "^5.0.0"
   },
@@ -26,5 +33,17 @@
   "files": [
     "dist",
     "src"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denislibs/scopekit.git"
+  },
+  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "bugs": {
+    "url": "https://github.com/denislibs/scopekit/issues"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  }
 }

@@ -281,7 +281,7 @@ export class Queue {
     while (this.#running < this.#concurrency && this.#waiting.length > 0) {
       const entry = this.#waiting.shift()!;
       this.#running++;
-      entry.run().finally(() => {
+      void entry.run().finally(() => {
         this.#running--;
         this.#pump();
         this.#checkIdle();
