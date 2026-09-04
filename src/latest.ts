@@ -88,7 +88,7 @@ export function latestBy<A, R>(
     });
   }) as LatestByFn<A, R>;
   wrapped.cancel = (key?: unknown) => {
-    if (arguments.length === 0 || key === undefined) {
+    if (key === undefined) {
       for (const r of perKey.values()) r.cancel();
       perKey.clear();
       return;

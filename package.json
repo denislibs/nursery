@@ -88,6 +88,10 @@
     "./angular": {
       "types": "./dist/angular.d.ts",
       "import": "./dist/angular.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "import": "./dist/diagnostics.js"
     }
   },
   "scripts": {
@@ -97,10 +101,11 @@
     "test:node": "vitest run --project node",
     "test:browser": "vitest run --project browser",
     "test:watch": "vitest --project node",
-    "build": "tsc -p tsconfig.build.json",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run check:types-consumer",
     "format": "oxfmt src test vitest.config.ts tsconfig.json tsconfig.build.json package.json svelte.config.js",
-    "format:check": "oxfmt --check src test vitest.config.ts tsconfig.json tsconfig.build.json package.json svelte.config.js"
+    "format:check": "oxfmt --check src test vitest.config.ts tsconfig.json tsconfig.build.json package.json svelte.config.js",
+    "check:types-consumer": "node scripts/check-consumer-types.mjs"
   },
   "devDependencies": {
     "@angular/common": "^21.2.22",

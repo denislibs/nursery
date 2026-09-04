@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { abortError, anySignal, type MaybeSignal } from './signal.js';
 import { Queue } from './limit.js';
 

@@ -1,3 +1,4 @@
+/// <reference lib="esnext.disposable" />
 import { linkSignals, abortError, isAbort, timeoutError, type MaybeSignal } from './signal.js';
 
 /** Typed context key. Create with contextKey(); bind a value with key.with(value). */

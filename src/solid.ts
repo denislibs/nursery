@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /** SolidJS adapters. Import from 'scopekit/solid'; requires solid-js >= 1.7. */
 import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
 import { Scope, type ScopeOptions } from './scope.js';

@@ -9,6 +9,7 @@ const entries = Object.entries(pkg.exports).filter(
   (e): e is [string, { types: string; import: string }] => typeof e[1] === 'object',
 );
 const modules = [
+  'diagnostics',
   'signal',
   'combine',
   'limit',

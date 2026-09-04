@@ -1,5 +1,6 @@
 /** Operators over AsyncIterable. Compose with pipe(); consume with for-await or toArray(). */
 import { timeoutError } from './signal.js';
+import { warn } from './diagnostics.js';
 
 export type Op<T, R> = (source: AsyncIterable<T>) => AsyncIterable<R>;
 
@@ -488,6 +489,7 @@ interface Subscriber<T> {
   done: boolean;
   failure?: { err: unknown };
   wake?: () => void;
+  warned?: boolean;
 }
 
 export interface ShareOptions {
@@ -496,6 +498,8 @@ export interface ShareOptions {
    * Requires a factory so a fresh iterable can be produced. Off by default: late consumers get done.
    */
   resubscribe?: boolean;
+  /** Emit a 'share-backlog' warning (once per consumer) when a consumer falls this far behind. Default 1000. */
+  warnAt?: number;
 }
 
 /**
@@ -521,8 +525,18 @@ export function share<T>(
   };
   const start = () => {
     finished = undefined;
+    const warnAt = opts.warnAt ?? 1000;
     stop = consume(factory(), {
-      value: v => broadcast(s => s.queue.push(v)),
+      value: v =>
+        broadcast(s => {
+          s.queue.push(v);
+          if (!s.warned && s.queue.length > warnAt) {
+            s.warned = true;
+            warn('share-backlog', `share(): a consumer is ${s.queue.length} values behind the source`, {
+              size: s.queue.length,
+            });
+          }
+        }),
       end: () => {
         finished = {};
         stop = undefined;

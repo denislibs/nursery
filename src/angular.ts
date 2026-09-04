@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /** Angular adapters. Import from 'scopekit/angular'; requires @angular/core >= 17 (signals, DestroyRef). */
 import { DestroyRef, effect, inject, signal, type Signal } from '@angular/core';
 import { Scope, type ScopeOptions } from './scope.js';

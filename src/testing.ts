@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Test helpers for code built on scopekit. Framework-agnostic; fakeClock() takes the test
  * runner's fake-timer object (vitest's `vi` works as is).

@@ -1,10 +1,17 @@
+/// <reference lib="dom" />
 import { abortError, type MaybeSignal } from './signal.js';
+import { warn } from './diagnostics.js';
 
 export interface OnOptions extends AddEventListenerOptions {
   /** Ends the iteration (gracefully) when aborted. */
   signal?: AbortSignal;
   /** Max events kept while the consumer is busy; the oldest are dropped. Default: unbounded. */
   buffer?: number;
+  /**
+   * With an unbounded buffer, emit an 'event-backlog' warning (once) when this many events are
+   * waiting: a sign the consumer cannot keep up. Default 1000.
+   */
+  warnAt?: number;
 }
 
 /**
@@ -48,11 +55,12 @@ export function on<E extends Event = Event>(
   type: string,
   opts: OnOptions = {},
 ): AsyncIterable<E> {
-  const { signal, buffer = Infinity, ...listenerOpts } = opts;
+  const { signal, buffer = Infinity, warnAt = 1000, ...listenerOpts } = opts;
   return {
     [Symbol.asyncIterator](): AsyncIterableIterator<E> {
       const queue: E[] = [];
       let finished = signal?.aborted ?? false;
+      let warned = false;
       let waiter: (() => void) | undefined;
       const wake = () => {
         waiter?.();
@@ -62,6 +70,14 @@ export function on<E extends Event = Event>(
         if (finished) return;
         queue.push(e as E);
         if (queue.length > buffer) queue.shift();
+        else if (!warned && queue.length > warnAt) {
+          warned = true;
+          warn(
+            'event-backlog',
+            `on(${type}): ${queue.length} events are waiting for a slow consumer; pass { buffer } to bound the queue`,
+            { type, size: queue.length },
+          );
+        }
         wake();
       };
       const finish = () => {

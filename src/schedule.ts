@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { abortError, throwIfAborted, type MaybeSignal } from './signal.js';
 
 export type TaskPriority = 'user-blocking' | 'user-visible' | 'background';

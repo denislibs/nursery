@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /** Vue 3 composables. Import from 'scopekit/vue'; requires vue >= 3.3. */
 import {
   onScopeDispose,

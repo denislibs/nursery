@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Svelte 5 adapters. Import from 'scopekit/svelte'; requires svelte >= 5.
  * Runes are compiler features, so the reactive re-run stays in your `$effect`; these helpers

@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 export {
   isAbort,
   abortError,
@@ -55,3 +56,5 @@ export type {
 } from './http.js';
 export { expose, wrap, transfer, callback, createPool } from './worker.js';
 export type { Endpoint, Remote, Pool, PoolOptions, PoolEndpoint } from './worker.js';
+export { onWarning } from './diagnostics.js';
+export type { Warning, WarningHandler } from './diagnostics.js';

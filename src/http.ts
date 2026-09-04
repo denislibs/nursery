@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { retry, type RetryOptions } from './combine.js';
 import { abortError, anySignal, isAbort, sleep, timeoutError, timeoutSignal } from './signal.js';
 import { fromReadableStream } from './iter.js';

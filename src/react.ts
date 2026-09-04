@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /** React adapters. Import from 'scopekit/react'; requires react >= 18. */
 import {
   createContext,
