@@ -17,7 +17,7 @@ const coreModules = [
   'worker',
   'testing',
 ];
-const adapters = ['react', 'vue', 'solid', 'svelte', 'angular'];
+const adapters = new Set(['react', 'vue', 'solid', 'svelte', 'angular']);
 const exportsOfFile = file => {
   const names = new Set();
   const src = readFileSync(file, 'utf8');
@@ -40,7 +40,7 @@ const exportsOf = spec => {
     names = coreModules.includes(m) ? exportsOfFile(join(repo, 'packages/core/src', m + '.ts')) : new Set();
   } else {
     const a = spec.slice('@scopekit/'.length);
-    names = adapters.includes(a) ? exportsOfFile(join(repo, 'packages', a, 'src/index.ts')) : new Set();
+    names = adapters.has(a) ? exportsOfFile(join(repo, 'packages', a, 'src/index.ts')) : new Set();
   }
   cache.set(spec, names);
   return names;

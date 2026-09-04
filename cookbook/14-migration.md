@@ -27,6 +27,7 @@
 Пример:
 
 ```ts
+// skip-check
 // RxJS
 fromEvent<InputEvent>(input, 'input').pipe(
   map(e => (e.target as HTMLInputElement).value),

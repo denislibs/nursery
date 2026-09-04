@@ -5,6 +5,12 @@
 
 ```ts
 import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEventStream, useWorker } from '@scopekit/react';
+import { useState, useEffect, useRef } from 'react';
+import { Scope } from '@scopekit/core/scope';
+import { Channel } from '@scopekit/core/events';
+import { pipe, debounce } from '@scopekit/core/iter';
+import { chunked } from '@scopekit/core/schedule';
+import { isAbort } from '@scopekit/core/signal';
 ```
 
 | Хук | Что делает |
@@ -22,26 +28,10 @@ import { ScopeProvider, useScope, useScopedEffect, useAsync, useLatest, useEvent
 
 ## useScopedEffect: базовый хук
 
-Так он устроен внутри, если захочется свою версию:
+`useScopedEffect(fn, deps)` это `useEffect`, где `fn` получает `Scope`. Каждый запуск эффекта
+получает новый скоуп, предыдущий закрывается в cleanup, поэтому ответы устаревшего запуска в
+состояние не попадают. Ошибки, кроме отмены, уходят в `Scope.onUnhandled`.
 
-```ts
-export function useScopedEffect(
-  effect: (scope: Scope) => void | Promise<void>,
-  deps: DependencyList,
-  opts?: ScopeOptions,
-) {
-  useEffect(() => {
-    const scope = new Scope(opts);
-    Promise.resolve(effect(scope)).catch(err => {
-      if (!isAbort(err)) reportError(err);
-    });
-    return () => {
-      void scope.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
-```
 
 Что это даёт:
 
@@ -70,25 +60,8 @@ function UserCard({ id }: { id: string }) {
 
 ## useAsync: загрузка с состоянием
 
-```ts
-type AsyncState<T> =
-  | { status: 'loading' }
-  | { status: 'success'; data: T }
-  | { status: 'error'; error: unknown };
+`useAsync(fn, deps)` возвращает `{ status: 'loading' } | { status: 'success', data } | { status: 'error', error }`.
 
-export function useAsync<T>(fn: (scope: Scope) => Promise<T>, deps: DependencyList): AsyncState<T> {
-  const [state, setState] = useState<AsyncState<T>>({ status: 'loading' });
-  useScopedEffect(async scope => {
-    setState({ status: 'loading' });
-    try {
-      setState({ status: 'success', data: await fn(scope) });
-    } catch (error) {
-      if (!isAbort(error)) setState({ status: 'error', error });
-    }
-  }, deps);
-  return state;
-}
-```
 
 ```tsx
 function Orders({ userId }: { userId: string }) {
@@ -133,23 +106,6 @@ function Search() {
 
 ## useEventStream: события DOM как цикл
 
-```ts
-export function useEventStream<E extends Event>(
-  target: EventTarget | null | undefined,
-  type: string,
-  handler: (e: E, scope: Scope) => void | Promise<void>,
-  deps: DependencyList = [],
-) {
-  const handlerRef = useRef(handler);
-  handlerRef.current = handler;
-  useScopedEffect(async scope => {
-    if (!target) return;
-    for await (const e of on<E>(target, type, { signal: scope.signal })) {
-      await handlerRef.current(e, scope);
-    }
-  }, [target, type, ...deps]);
-}
-```
 
 ```tsx
 useEventStream<KeyboardEvent>(window, 'keydown', e => {
@@ -181,16 +137,8 @@ function AutoSave({ doc }: { doc: string }) {
 
 ## Воркер в компоненте
 
-```ts
-export function useWorker<T>(factory: () => Worker) {
-  const [remote] = useState(() => {
-    const worker = factory();
-    return { worker, api: wrap<T>(worker) };
-  });
-  useEffect(() => () => { remote.api[Symbol.dispose](); remote.worker.terminate(); }, [remote]);
-  return remote.api;
-}
-```
+`useWorker(factory)` создаёт воркер один раз на монтирование и делает `terminate` на unmount.
+
 
 ```tsx
 const parser = useWorker<typeof api>(() => new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' }));
@@ -256,6 +204,7 @@ function Dashboard() {
   const scope = useScope();                 // ребёнок скоупа страницы
   const trace = scope.get(TraceId);
   useScopedEffect(async s => { /* s тоже ребёнок страницы */ }, []);
+  return <Widget trace={trace} />;
 }
 ```
 

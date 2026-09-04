@@ -3,3 +3,7 @@ dist/
 .DS_Store
 __screenshots__/
 packages/*/dist/
+docs/api/node_modules/
+docs/api/dist/
+examples/*/node_modules/
+examples/*/dist/

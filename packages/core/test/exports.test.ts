@@ -6,7 +6,7 @@ const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
   exports: Record<string, string | { types: string; import: string }>;
 };
 const entries = Object.entries(pkg.exports).filter(
-  (e): e is [string, { types: string; import: string }] => typeof e[1] === 'object',
+  (e): e is [string, { types: string; import: string }] => typeof e[1] === 'object' && e[0] !== './bundle',
 );
 const modules = [
   'diagnostics',
@@ -30,6 +30,10 @@ describe('package exports map', () => {
 
   test('exposes package.json for tooling', () => {
     expect(pkg.exports['./package.json']).toBe('./package.json');
+  });
+
+  test('exposes the CDN bundle with the root types', () => {
+    expect(pkg.exports['./bundle']).toEqual({ types: './dist/index.d.ts', import: './dist/scopekit.min.js' });
   });
 
   test.each(entries)('%s points at a built file with a matching source', (key, entry) => {

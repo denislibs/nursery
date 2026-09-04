@@ -2,6 +2,9 @@
 
 ```ts
 import { createHttp, HttpError } from '@scopekit/core/http';
+import { isAbort } from '@scopekit/core/signal';
+import { singleFlight } from '@scopekit/core/latest';
+import { pipe, filter, take } from '@scopekit/core/iter';
 ```
 
 ## Клиент на приложение
@@ -250,8 +253,8 @@ for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000, max
 ## Прогресс, вложенный query, цепочка хуков
 
 ```ts
-await http.post('/upload', { scope, body: file, onUploadProgress: (sent, total) => bar.value = sent / total });
-const res = await http.request('/big.bin', { scope, onDownloadProgress: (loaded, total) => ... });
+await http.post('/upload', { scope, body: file, onUploadProgress: (sent, total) => (bar.value = sent / total) });
+const res = await http.request('/big.bin', { scope, onDownloadProgress: (loaded, total) => setProgress(loaded / (total ?? loaded)) });
 
 http.get('/items', { scope, query: { filter: { status: 'open', tags: ['a', 'b'] } } });
 // ?filter[status]=open&filter[tags]=a&filter[tags]=b   (или свой querySerializer)

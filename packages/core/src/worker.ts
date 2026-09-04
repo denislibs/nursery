@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+import './polyfill.js';
 import { abortError, anySignal, type MaybeSignal } from './signal.js';
 import { Queue } from './limit.js';
 

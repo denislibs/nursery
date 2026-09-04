@@ -2,6 +2,9 @@
 
 ```ts
 import { latest, singleFlight } from '@scopekit/core/latest';
+import { Queue } from '@scopekit/core/limit';
+import { on } from '@scopekit/core/events';
+import { iter } from '@scopekit/core';
 ```
 
 ## Проблема

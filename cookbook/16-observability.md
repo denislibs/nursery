@@ -1,5 +1,10 @@
 # Наблюдаемость: имена, дамп, зависшие задачи, необработанные ошибки
 
+```ts
+import { Scope } from '@scopekit/core/scope';
+import { timeoutError } from '@scopekit/core/signal';
+```
+
 ## Имена задач и дамп дерева
 
 ```ts

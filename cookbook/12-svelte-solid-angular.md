@@ -2,13 +2,7 @@
 
 Адаптеры поставляются как `@scopekit/svelte`, `@scopekit/solid` и `@scopekit/angular`.
 Во всех подход один: скоуп создаётся, когда компонент или эффект стартует, и закрывается в
-cleanup. Ниже их использование и то, как они устроены внутри.
-
-```ts
-import { useScope, scopedEffect, useLatest, eventStream, useWorker } from '@scopekit/svelte';
-import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from '@scopekit/solid';
-import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '@scopekit/angular';
-```
+cleanup.
 
 Svelte 5: руны это компилятор, поэтому перезапуск остаётся в вашем `$effect`, а `scopedEffect`
 и `eventStream` возвращают cleanup:
@@ -36,18 +30,9 @@ Svelte 5: руны это компилятор, поэтому перезапу�
 ## Svelte 5 (runes)
 
 ```ts
-// lib/scope.svelte.ts
-import { Scope, type ScopeOptions } from '@scopekit/core/scope';
-import { isAbort } from '@scopekit/core/signal';
-
-export function scopedEffect(effect: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions) {
-  $effect(() => {
-    const scope = new Scope(opts);
-    Promise.resolve(effect(scope)).catch(err => { if (!isAbort(err)) console.error(err); });
-    return () => { void scope.close(); };
-  });
-}
+import { useScope, scopedEffect, asyncStore, useLatest, eventStream, useWorker } from '@scopekit/svelte';
 ```
+
 
 ```svelte
 <script lang="ts">
@@ -88,23 +73,12 @@ Svelte 4 со сторами: та же логика в `onMount`, возвра�
 ## SolidJS
 
 ```ts
-import { createSignal, createEffect, onCleanup, createResource } from 'solid-js';
-import { Scope } from '@scopekit/core/scope';
-
-export function createScope(opts?: ScopeOptions) {
-  const scope = new Scope(opts);
-  onCleanup(() => { void scope.close(); });
-  return scope;
-}
-
-export function scopedEffect(effect: (scope: Scope) => void | Promise<void>) {
-  createEffect(() => {
-    const scope = new Scope();
-    onCleanup(() => { void scope.close(); });
-    Promise.resolve(effect(scope)).catch(err => { if (!isAbort(err)) console.error(err); });
-  });
-}
+import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from '@scopekit/solid';
+import { createSignal, createResource, onCleanup } from 'solid-js';
+import { latest } from '@scopekit/core/latest';
+import { on } from '@scopekit/core/events';
 ```
+
 
 `createResource` сам передаёт сигнал не везде, но даёт `refetching`; проще всего строить
 ресурс поверх `Scope.run`:
@@ -136,18 +110,16 @@ scopedEffect(async scope => {
 
 ## Angular
 
+```ts
+import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '@scopekit/angular';
+import { Component, Injectable, effect, input, signal } from '@angular/core';
+import { latest } from '@scopekit/core/latest';
+import { on } from '@scopekit/core/events';
+import { isAbort } from '@scopekit/core/signal';
+```
+
 `DestroyRef` даёт хук на уничтожение, `inject` работает в конструкторе и полях.
 
-```ts
-import { DestroyRef, inject, Injectable, signal } from '@angular/core';
-import { Scope } from '@scopekit/core/scope';
-
-export function injectScope(opts?: ScopeOptions): Scope {
-  const scope = new Scope(opts);
-  inject(DestroyRef).onDestroy(() => { void scope.close(); });
-  return scope;
-}
-```
 
 ```ts
 @Component({ /* ... */ })
@@ -208,6 +180,12 @@ const keys$ = fromAsyncIterable(sig => on<KeyboardEvent>(window, 'keydown', { si
 ## Web Components / vanilla
 
 ```ts
+import { Scope } from '@scopekit/core/scope';
+import { on } from '@scopekit/core/events';
+import { pipe, throttle } from '@scopekit/core/iter';
+```
+
+```ts
 class LiveChart extends HTMLElement {
   #scope?: Scope;
 
@@ -226,6 +204,10 @@ class LiveChart extends HTMLElement {
 
   disconnectedCallback() {
     void this.#scope?.close();
+  }
+
+  draw(points: unknown) {
+    /* ... */
   }
 }
 ```

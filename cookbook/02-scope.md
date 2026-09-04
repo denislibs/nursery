@@ -5,6 +5,9 @@
 
 ```ts
 import { Scope, contextKey } from '@scopekit/core/scope';
+import { sleep } from '@scopekit/core/signal';
+import { latest } from '@scopekit/core/latest';
+import { createHttp } from '@scopekit/core/http';
 ```
 
 ## Базовый сценарий: экран загружает несколько вещей

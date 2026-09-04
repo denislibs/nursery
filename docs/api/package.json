@@ -1,0 +1,13 @@
+{
+  "name": "scopekit-api-docs",
+  "private": true,
+  "type": "module",
+  "description": "API reference generator. Isolated because typedoc needs TypeScript <= 6 while the packages compile with TypeScript 7.",
+  "scripts": {
+    "build": "typedoc"
+  },
+  "devDependencies": {
+    "typedoc": "^0.28.20",
+    "typescript": "^6.0.0"
+  }
+}

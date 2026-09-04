@@ -1,7 +1,8 @@
 # Retry и таймауты
 
 ```ts
-import { withTimeout, retry, race } from '@scopekit/core/combine';
+import { withTimeout, retry, race, settle } from '@scopekit/core/combine';
+import { HttpError } from '@scopekit/core/http';
 ```
 
 ## Таймаут на операцию

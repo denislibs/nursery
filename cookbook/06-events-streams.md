@@ -3,6 +3,8 @@
 ```ts
 import { on, Channel } from '@scopekit/core/events';
 import { pipe, map, filter, take, buffer, debounce, throttle, toArray } from '@scopekit/core/iter';
+import { anySignal, abortError } from '@scopekit/core/signal';
+import { withTimeout } from '@scopekit/core/combine';
 ```
 
 ## on: события в цикле for-await
@@ -250,5 +252,6 @@ const r = jobs.tryReceive();                 // { ok: true, value } | { ok: fals
 `resubscribe` источник запускается заново для следующего потребителя:
 
 ```ts
+import { share } from '@scopekit/core/iter';
 const prices = share(() => messages(openSocket(), signal), { resubscribe: true });
 ```

@@ -85,10 +85,14 @@
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./bundle": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/scopekit.min.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node ../../scripts/postbuild.mjs core",
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/postbuild.mjs core && node ../../scripts/bundle-cdn.mjs",
     "prepublishOnly": "npm run build"
   },
   "engines": {

@@ -19,9 +19,11 @@
     "build": "npm run build -w @scopekit/core && npm run build -w @scopekit/react -w @scopekit/vue -w @scopekit/solid -w @scopekit/svelte -w @scopekit/angular",
     "check:types-consumer": "node scripts/check-consumer-types.mjs",
     "check:pkg": "node scripts/check-packages.mjs",
-    "check:cookbook": "node scripts/check-cookbook.mjs",
+    "check:cookbook": "node scripts/check-cookbook.mjs && node scripts/check-cookbook-compile.mjs",
     "size": "size-limit",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run check:cookbook && npm test && npm run build && npm run check:types-consumer && npm run check:pkg && npm run size"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run check:cookbook && npm test && npm run build && npm run check:types-consumer && npm run check:pkg && npm run size",
+    "docs:api": "npm --prefix docs/api install --no-audit --no-fund && npm --prefix docs/api run build",
+    "example": "npm --prefix examples/playground install --no-audit --no-fund && npm --prefix examples/playground run dev"
   },
   "devDependencies": {
     "@angular/common": "^21.2.22",
@@ -35,6 +37,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitest/browser-playwright": "^5.0.0",
+    "esbuild": "^0.25.12",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
     "oxlint-tsgolint": "^7.0.2001",

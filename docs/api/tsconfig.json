@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@scopekit/core": ["../../packages/core/src/index.ts"],
+      "@scopekit/core/*": ["../../packages/core/src/*.ts"]
+    }
+  },
+  "include": ["../../packages/*/src"]
+}

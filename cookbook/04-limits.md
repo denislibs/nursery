@@ -2,6 +2,8 @@
 
 ```ts
 import { Semaphore, Mutex, map, mapSettled, Queue } from '@scopekit/core/limit';
+import { sleep } from '@scopekit/core/signal';
+import { wrap } from '@scopekit/core/worker';
 ```
 
 ## map: обработать список с ограничением

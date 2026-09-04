@@ -2,12 +2,23 @@
 
 Список того, что регулярно всплывает на ревью, и как это исправить.
 
+```ts
+import { Scope } from '@scopekit/core/scope';
+import { isAbort, sleep } from '@scopekit/core/signal';
+import { retry, withTimeout } from '@scopekit/core/combine';
+import { latest } from '@scopekit/core/latest';
+import { on } from '@scopekit/core/events';
+import { useScopedEffect } from '@scopekit/react';
+```
+
 ## Функция без signal
 
 ```ts
 // плохо: вызывающий не может отменить
 async function loadUser(id: string) { return fetch(`/users/${id}`).then(r => r.json()); }
+```
 
+```ts
 // хорошо
 async function loadUser(id: string, signal: AbortSignal) {
   return http.get<User>(`/users/${id}`, { signal });
@@ -22,7 +33,9 @@ async function loadUser(id: string, signal: AbortSignal) {
 ```ts
 // плохо: пользователь увидит тост «Ошибка» при каждом уходе со страницы
 try { await load(signal); } catch (e) { toast('Ошибка'); }
+```
 
+```ts
 // хорошо
 try { await load(signal); } catch (e) { if (!isAbort(e)) toast('Ошибка'); }
 ```
@@ -39,7 +52,9 @@ useScopedEffect(async scope => {
   await sleep(500);
   setOpen(true);
 }, []);
+```
 
+```ts
 // хорошо
 useScopedEffect(async scope => {
   await sleep(500, scope.signal);
@@ -54,7 +69,9 @@ useScopedEffect(async scope => {
 ```ts
 // плохо: одна зависшая попытка съест весь бюджет
 await withTimeout(sig => retry(s => api.x(s), { retries: 3, signal: sig }), 5000);
+```
 
+```ts
 // хорошо: таймаут на попытку, общий дедлайн отдельно, если нужен
 await retry(sig => api.x(sig), { retries: 3, attemptTimeout: 5000 });
 ```
@@ -64,7 +81,9 @@ await retry(sig => api.x(sig), { retries: 3, attemptTimeout: 5000 });
 ```ts
 // плохо: при ошибке b запрос a продолжает жить
 const [a, b] = await Promise.all([api.a(signal), api.b(signal)]);
+```
 
+```ts
 // хорошо
 const [a, b] = await Scope.run(async scope =>
   Promise.all([scope.spawn(sig => api.a(sig)), scope.spawn(sig => api.b(sig))]),
@@ -82,9 +101,11 @@ const [a, b] = await Scope.run(async scope =>
 ```ts
 // плохо: ошибка тихо отменит соседей, никто не узнает
 pageScope.spawn(sig => prefetch(sig));
+```
 
+```ts
 // хорошо: либо await, либо ловим внутри
-pageScope.spawn(sig => prefetch(sig).catch(err => { if (!isAbort(err)) log(err); }));
+pageScope.spawn(sig => prefetch(sig).catch(err => { if (!isAbort(err)) log.warn(err); }));
 ```
 
 ## Channel.send с .catch как «неблокирующая отправка»
@@ -98,7 +119,9 @@ pageScope.spawn(sig => prefetch(sig).catch(err => { if (!isAbort(err)) log(err);
 // плохо: unmount не отменит последний запрос
 const search = latest((q, sig) => api.search(q, sig));
 search(q);
+```
 
+```ts
 // хорошо
 search(q, scope.signal);
 // или useLatestCallback из React-рецептов, он вызывает cancel() при unmount
@@ -124,7 +147,9 @@ TanStack Query с `retry: 3` и `createHttp` с `retry: { retries: 2 }` дают
 ```ts
 // плохо: pointermove буферизуется без ограничений, обработка отстаёт на секунды
 for await (const e of on(el, 'pointermove', { signal })) await heavy(e);
+```
 
+```ts
 // хорошо: важно только последнее положение
 for await (const e of on(el, 'pointermove', { signal, buffer: 1 })) await heavy(e);
 ```

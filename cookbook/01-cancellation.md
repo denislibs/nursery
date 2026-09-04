@@ -113,7 +113,7 @@ async function withRequestSignal<T>(parent: AbortSignal, fn: (s: AbortSignal) =>
 
 ```ts
 function parseHuge(rows: string[], signal: AbortSignal) {
-  const out = [];
+  const out: unknown[] = [];
   for (let i = 0; i < rows.length; i++) {
     if (i % 1000 === 0) throwIfAborted(signal);   // бросит signal.reason
     out.push(parseRow(rows[i]));
@@ -134,7 +134,9 @@ function parseHuge(rows: string[], signal: AbortSignal) {
 ctrl.abort(abortError('Пользователь закрыл диалог'));
 
 // где-то глубже
-catch (err) {
+try {
+  await loadData(ctrl.signal);
+} catch (err) {
   if (isAbort(err)) console.debug('cancelled:', (err as Error).message);
 }
 ```
@@ -146,7 +148,7 @@ catch (err) {
 ```ts
 function geocode(address: string, signal: AbortSignal): Promise<Coords> {
   throwIfAborted(signal);
-  return new Promise((resolve, reject) => {
+  return new Promise<Coords>((resolve, reject) => {
     const req = legacyGeocoder.lookup(address, { onSuccess: resolve, onError: reject });
     signal.addEventListener('abort', () => {
       req.cancel();

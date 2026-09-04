@@ -16,7 +16,7 @@ describe('workspace packages', () => {
     };
     expect(pkg.name).toBe(dir === 'core' ? '@scopekit/core' : `@scopekit/${dir}`);
     for (const [key, entry] of Object.entries(pkg.exports)) {
-      if (typeof entry === 'string') continue;
+      if (typeof entry === 'string' || key === './bundle') continue;
       const src = entry.import.replace(/^\.\/dist\//, 'src/').replace(/\.js$/, '.ts');
       expect(existsSync(join(repo, 'packages', dir, src)), `${dir}: ${key} -> ${src}`).toBe(true);
       expect(entry.types).toBe(entry.import.replace(/\.js$/, '.d.ts'));

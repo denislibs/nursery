@@ -3,6 +3,8 @@
 ```ts
 import { expose } from '@scopekit/core/worker';                    // в воркере
 import { wrap, type Remote, type Endpoint } from '@scopekit/core/worker';   // в главном потоке
+import { isAbort } from '@scopekit/core/signal';
+import { Queue, map } from '@scopekit/core/limit';
 ```
 
 ## Минимальный пример
@@ -146,6 +148,7 @@ const remote = wrap<Api>(shared.port);
 В Node есть `MessageChannel`, на нём протокол проверяется целиком:
 
 ```ts
+const api = { add: async (a: number, b: number) => a + b };
 const { port1, port2 } = new MessageChannel();
 const stop = expose(api, port1);
 const remote = wrap<typeof api>(port2);
@@ -164,8 +167,8 @@ const pixels = new Uint8ClampedArray(w * h * 4);
 const out = await remote.blur(transfer({ pixels, w, h }, [pixels.buffer]), { signal });
 // pixels.buffer.byteLength === 0: буфер уехал в воркер
 
-// и обратно
-export const api = {
+// и обратно, на стороне воркера
+export const workerApi = {
   async blur(img: { pixels: Uint8ClampedArray; w: number; h: number }) {
     const result = process(img);
     return transfer(result, [result.pixels.buffer]);
@@ -213,7 +216,8 @@ pool.dispose();                                        // или `using pool = c
 результатах колбэков, а колбэк может принимать колбэк:
 
 ```ts
-await remote.run(files.map(f => ({ file: transfer(f, [f.buffer]), onDone: callback(markDone) })));
+import { callback, transfer } from '@scopekit/core/worker';
+await remote.run(chunks.map(c => ({ chunk: transfer(c, [c.buffer]), onDone: callback(markDone) })));
 await remote.produce(callback(async (chunk: ArrayBuffer) => transfer(process(chunk), [chunk])));
 ```
 

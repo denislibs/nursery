@@ -4,6 +4,11 @@
 
 ```ts
 import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorker } from '@scopekit/vue';
+import { ref, shallowRef, watch } from 'vue';
+import { Scope } from '@scopekit/core/scope';
+import { latest } from '@scopekit/core/latest';
+import { on, Channel } from '@scopekit/core/events';
+import { pipe, debounce } from '@scopekit/core/iter';
 ```
 
 | Композабл | Что делает |
@@ -20,15 +25,6 @@ import { useScope, useScopedWatch, useAsync, useLatest, useEventStream, useWorke
 
 ## useScope: скоуп на компонент
 
-Так композаблы устроены внутри, если нужна своя версия:
-
-```ts
-export function useScope(opts?: ScopeOptions): Scope {
-  const scope = new Scope(opts);
-  onScopeDispose(() => { void scope.close(); });
-  return scope;
-}
-```
 
 ```vue
 <script setup lang="ts">
@@ -41,15 +37,6 @@ http.get<User>('/me', { signal: scope.signal }).then(u => (user.value = u)).catc
 
 ## useScopedWatch: перезапуск при изменении зависимостей
 
-```ts
-export function useScopedWatch(effect: (scope: Scope) => void | Promise<void>, opts?: ScopeOptions) {
-  watchEffect(onCleanup => {
-    const scope = new Scope(opts);
-    onCleanup(() => { void scope.close(); });
-    Promise.resolve(effect(scope)).catch(err => { if (!isAbort(err)) console.error(err); });
-  });
-}
-```
 
 Внимание: реактивные зависимости собираются только из синхронной части `effect`. Читайте
 `props.id` до первого `await`:
@@ -66,27 +53,6 @@ useScopedWatch(async scope => {
 
 ## useAsync
 
-```ts
-export function useAsync<T>(fn: (scope: Scope) => Promise<T>) {
-  const data = shallowRef<T | null>(null);
-  const error = shallowRef<unknown>(null);
-  const loading = ref(false);
-
-  useScopedWatch(async scope => {
-    loading.value = true;
-    error.value = null;
-    try {
-      data.value = await fn(scope);
-    } catch (e) {
-      if (!isAbort(e)) error.value = e;
-    } finally {
-      if (!scope.signal.aborted) loading.value = false;
-    }
-  });
-
-  return { data, error, loading };
-}
-```
 
 ```vue
 <script setup lang="ts">
@@ -99,22 +65,6 @@ const { data: orders, loading } = useAsync(scope =>
 
 ## Поиск без гонок
 
-```ts
-export function useLatest<A, R>(fn: (arg: A, signal: AbortSignal) => Promise<R>) {
-  const run = latest(fn);
-  const pending = ref(false);
-  onScopeDispose(() => run.cancel());
-  const call = async (arg: A) => {
-    pending.value = true;
-    try {
-      return await run(arg);
-    } finally {
-      pending.value = run.pending;
-    }
-  };
-  return { call, pending };
-}
-```
 
 ```vue
 <script setup lang="ts">
@@ -183,14 +133,6 @@ export const useCatalog = defineStore('catalog', () => {
 
 ## Воркер
 
-```ts
-export function useWorker<T>(factory: () => Worker) {
-  const worker = factory();
-  const api = wrap<T>(worker);
-  onScopeDispose(() => { api[Symbol.dispose](); worker.terminate(); });
-  return api;
-}
-```
 
 ## Nuxt useAsyncData
 

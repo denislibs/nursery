@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "scopekit",
+  "entryPoints": [
+    "../../packages/core/src/index.ts",
+    "../../packages/core/src/testing.ts",
+    "../../packages/react/src/index.ts",
+    "../../packages/vue/src/index.ts",
+    "../../packages/solid/src/index.ts",
+    "../../packages/svelte/src/index.ts",
+    "../../packages/angular/src/index.ts"
+  ],
+  "tsconfig": "./tsconfig.json",
+  "out": "./dist",
+  "readme": "../../README.md",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "categorizeByGroup": true,
+  "navigation": { "includeCategories": true }
+}

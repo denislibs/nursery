@@ -31,7 +31,7 @@ jobs:
       - run: npm run size
 
   browser:
-    name: browser tests (chromium)
+    name: browser tests (chromium · firefox · webkit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -45,5 +45,5 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser

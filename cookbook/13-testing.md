@@ -3,6 +3,15 @@
 Библиотека проектировалась так, чтобы код на ней тестировался без моков сети и без
 реального времени. Примеры на vitest, для jest отличия косметические.
 
+```ts
+import { retry, withTimeout } from '@scopekit/core/combine';
+import { sleep, isAbort } from '@scopekit/core/signal';
+import { Scope } from '@scopekit/core/scope';
+import { latest } from '@scopekit/core/latest';
+import { createHttp } from '@scopekit/core/http';
+import { expose, wrap } from '@scopekit/core/worker';
+```
+
 ## Фейковые таймеры
 
 `sleep`, `retry`, `withTimeout`, `debounce`, `throttle`, `Scope({ timeout })` работают на
@@ -47,10 +56,10 @@ await vi.advanceTimersByTimeAsync(100);
 await expectation;
 
 // тоже хорошо
-const p = withTimeout(sig => sleep(1000, sig), 100);
-p.catch(() => {});
+const p2 = withTimeout(sig => sleep(1000, sig), 100);
+p2.catch(() => {});
 await vi.advanceTimersByTimeAsync(100);
-await expect(p).rejects.toSatisfy(isAbort);
+await expect(p2).rejects.toSatisfy(isAbort);
 ```
 
 ## Проверять отмену
@@ -150,7 +159,11 @@ try {
 висящих запросов:
 
 ```tsx
-const http = createHttp({ fetch: async () => json({ name: 'Ann' }) });
+// skip-check
+import { render, screen } from '@testing-library/react';
+import { jsonResponse } from '@scopekit/core/testing';
+
+const http = createHttp({ fetch: async () => jsonResponse({ name: 'Ann' }) });
 render(<UserCard id="1" />);
 expect(await screen.findByText('Ann')).toBeInTheDocument();
 ```
@@ -170,6 +183,7 @@ Node эмулирует `AbortSignal`, `DOMException`, `Response`, `MessageChann
 
 ```ts
 import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from '@scopekit/core/testing';
+import { createPool } from '@scopekit/core/worker';
 
 const f = fakeFetch({
   'GET /users/:id': ({ params }) => ({ id: params.id }),               // объект → JSON 200
@@ -182,11 +196,11 @@ f.calls[0].headers.get('authorization');
 const remote = wrap<typeof api>(mockWorker(api));   // тот же протокол, без Worker
 const pool = createPool(() => mockWorker(api), { size: 2 });
 
-const reason = await expectAborted(promise);         // бросит, если промис не был отменён
+const reason = await expectAborted(sleep(1000, ctrl.signal));   // бросит, если промис не был отменён
 const clock = fakeClock(vi);
 clock.install();
-const rejection = clock.rejection(retry(...));       // обработчик навешен до продвижения времени
-await clock.tick(1000);
-expect((await rejection).message).toBe('...');
+const rejection = clock.rejection(retry(async () => { throw new Error('always'); }, { retries: 1, delay: 1000 }));
+await clock.tick(1000);                              // обработчик навешен до продвижения времени
+expect((await rejection).message).toBe('always');
 clock.uninstall();
 ```
