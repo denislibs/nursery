@@ -3,7 +3,10 @@ import { abortError, anySignal, timeoutError, timeoutSignal } from './signal.js'
 import { fromReadableStream } from './iter.js';
 import type { Scope } from './scope.js';
 
-export type Query = Record<string, string | number | boolean | null | undefined>;
+export type QueryValue = string | number | boolean | null | undefined | QueryValue[] | { [key: string]: QueryValue };
+export type Query = Record<string, QueryValue>;
+
+export type RequestHook = (url: string, init: RequestInit) => void | Partial<{ url: string; init: RequestInit }> | Promise<void | Partial<{ url: string; init: RequestInit }>>;
 
 /** A function or a zod-like object that validates/transforms the parsed body. */
 export type Parser<T> = ((raw: unknown) => T) | { parse: (raw: unknown) => T };
@@ -29,8 +32,10 @@ export interface HttpOptions {
   dedupe?: boolean;
   headers?: HeadersInit;
   fetch?: typeof fetch;
-  /** Runs before every attempt. May return a replacement url and/or init. */
-  onRequest?: (url: string, init: RequestInit) => void | Partial<{ url: string; init: RequestInit }> | Promise<void | Partial<{ url: string; init: RequestInit }>>;
+  /** Runs before every attempt (a single hook or a chain). May return a replacement url and/or init. */
+  onRequest?: RequestHook | RequestHook[];
+  /** Turns `query` into a query string. Default: bracket notation for objects, repeated keys for arrays. */
+  querySerializer?: (query: Query) => string | URLSearchParams;
   /** Runs after every attempt's response, before retry decisions. May return a replacement Response. */
   onResponse?: (res: Response, ctx: RequestHookContext) => void | Response | Promise<void | Response>;
 }
@@ -42,9 +47,15 @@ export type RequestOwner =
 
 export interface RequestCommon<T = unknown> extends Omit<RequestInit, 'signal' | 'body' | 'method'> {
   method?: string;
+  /** Overrides the client baseUrl for this request. */
+  baseUrl?: string;
   /** Plain objects and arrays are JSON-encoded; everything fetch accepts is passed through. */
   body?: unknown;
   query?: Query;
+  /** Called as response bytes arrive. `total` comes from Content-Length when present. */
+  onDownloadProgress?: (loaded: number, total: number | undefined) => void;
+  /** Streams the request body (duplex: 'half') and reports bytes sent. Chromium and Node; elsewhere reports once at the end. */
+  onUploadProgress?: (sent: number, total: number) => void;
   timeout?: number;
   /** Absolute performance.now() deadline; shortens the timeout and stops retries. Defaults to scope.deadline. */
   deadline?: number;
@@ -128,17 +139,20 @@ export function createHttp(options: HttpOptions = {}): Http {
     fetch: fetchFn = globalThis.fetch,
     onRequest,
     onResponse,
+    querySerializer = defaultQuerySerializer,
   } = options;
+  const requestHooks: RequestHook[] = onRequest === undefined ? [] : Array.isArray(onRequest) ? onRequest : [onRequest];
   const flights = new Map<string, Flight>();
 
-  function buildUrl(url: string, query?: Query): string {
+  function buildUrl(url: string, query: Query | undefined, base: string | undefined): string {
     const absolute = /^[a-z][a-z0-9+.-]*:/i.test(url);
     const u =
-      absolute || !baseUrl
+      absolute || !base
         ? new URL(url)
-        : new URL(url.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
+        : new URL(url.replace(/^\//, ''), base.endsWith('/') ? base : base + '/');
     if (query) {
-      for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null) u.searchParams.append(k, String(v));
+      const extra = new URLSearchParams(querySerializer(query));
+      extra.forEach((v, k) => u.searchParams.append(k, v));
     }
     return u.href;
   }
@@ -146,8 +160,8 @@ export function createHttp(options: HttpOptions = {}): Http {
   async function performOnce(url: string, init: RequestInit, signal: AbortSignal, attempt: number): Promise<Response> {
     let finalUrl = url;
     let finalInit: RequestInit = { ...init, signal };
-    if (onRequest) {
-      const patch = await onRequest(finalUrl, finalInit);
+    for (const hook of requestHooks) {
+      const patch = await hook(finalUrl, finalInit);
       if (patch?.url) finalUrl = patch.url;
       if (patch?.init) finalInit = { ...patch.init, signal };
     }
@@ -245,21 +259,29 @@ export function createHttp(options: HttpOptions = {}): Http {
   function request(url: string, opts: RequestOptions): Promise<Response> {
     const own = owner(opts);
     if (own instanceof Error) return Promise.reject(own);
-    const { method = 'GET', body, query, retry: reqRetry, dedupe, headers: reqHeaders } = opts;
+    const { method = 'GET', body, query, retry: reqRetry, dedupe, headers: reqHeaders, baseUrl: reqBase, onDownloadProgress, onUploadProgress } = opts;
     const { signal: _s, scope: _sc, timeout: _t, deadline: _d, parse: _p, ...restInit } = opts as RequestOptions & { scope?: Scope };
-    const rest = omit(restInit, ['method', 'body', 'query', 'retry', 'dedupe', 'headers']);
+    const rest = omit(restInit, ['method', 'body', 'query', 'retry', 'dedupe', 'headers', 'baseUrl', 'onDownloadProgress', 'onUploadProgress']);
     const m = method.toUpperCase();
     const headers = new Headers(defaultHeaders);
     new Headers(reqHeaders).forEach((v, k) => headers.set(k, v));
-    const encoded = encodeBody(body, headers);
-    const fullUrl = buildUrl(url, query);
-    const init: RequestInit = { ...rest, method: m, headers, body: encoded };
+    let encoded = encodeBody(body, headers);
+    const fullUrl = buildUrl(url, query, reqBase ?? baseUrl);
+    const init: RequestInit & { duplex?: 'half' } = { ...rest, method: m, headers, body: encoded };
+    if (onUploadProgress && encoded !== undefined) {
+      const streamed = uploadStream(encoded, onUploadProgress);
+      if (streamed) {
+        init.body = streamed;
+        init.duplex = 'half';
+        encoded = streamed;
+      }
+    }
     const policy = reqRetry ?? (idempotentMethods.includes(m) ? defaultRetry : undefined);
     const start = (sig: AbortSignal) => withRetry(fullUrl, init, policy, own.attemptTimeout, sig);
 
-    const canDedupe = (dedupe ?? defaultDedupe) && (m === 'GET' || m === 'HEAD');
-    if (!canDedupe) return start(own.signal);
-    return subscribe(`${m} ${fullUrl}`, own.signal, start);
+    const canDedupe = (dedupe ?? defaultDedupe) && (m === 'GET' || m === 'HEAD') && !onDownloadProgress;
+    const result = canDedupe ? subscribe(`${m} ${fullUrl}`, own.signal, start) : start(own.signal);
+    return onDownloadProgress ? result.then(res => withDownloadProgress(res, onDownloadProgress)) : result;
   }
 
   async function parsed<T>(url: string, opts: RequestOptions<T>): Promise<T> {
@@ -347,6 +369,70 @@ export function createHttp(options: HttpOptions = {}): Http {
     stream,
     sse,
   };
+}
+
+function defaultQuerySerializer(query: Query): URLSearchParams {
+  const params = new URLSearchParams();
+  const walk = (key: string, value: QueryValue) => {
+    if (value === undefined || value === null) return;
+    if (Array.isArray(value)) {
+      for (const v of value) walk(key, v);
+    } else if (typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) walk(`${key}[${k}]`, v);
+    } else {
+      params.append(key, String(value));
+    }
+  };
+  for (const [k, v] of Object.entries(query)) walk(k, v);
+  return params;
+}
+
+/** Wraps a body into a ReadableStream that reports bytes sent. Returns undefined for unsupported bodies. */
+function uploadStream(body: BodyInit, onProgress: (sent: number, total: number) => void): ReadableStream<Uint8Array> | undefined {
+  let bytes: Uint8Array | Blob;
+  if (typeof body === 'string') bytes = new TextEncoder().encode(body);
+  else if (body instanceof Blob) bytes = body;
+  else if (body instanceof ArrayBuffer) bytes = new Uint8Array(body);
+  else if (ArrayBuffer.isView(body)) bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  else if (body instanceof URLSearchParams) bytes = new TextEncoder().encode(body.toString());
+  else return undefined; // FormData and streams: no reliable size, leave as is
+  const total = bytes instanceof Blob ? bytes.size : bytes.byteLength;
+  const CHUNK = 64 * 1024;
+  let offset = 0;
+  let sent = 0;
+  // Re-chunk so progress is reported in 64 KiB steps regardless of how the engine slices the source.
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (offset >= total) {
+        if (total === 0) onProgress(0, 0);
+        controller.close();
+        return;
+      }
+      const end = Math.min(offset + CHUNK, total);
+      const piece = bytes instanceof Blob ? new Uint8Array(await bytes.slice(offset, end).arrayBuffer()) : bytes.subarray(offset, end);
+      offset = end;
+      sent += piece.byteLength;
+      onProgress(sent, total);
+      controller.enqueue(piece);
+    },
+  });
+}
+
+function withDownloadProgress(res: Response, onProgress: (loaded: number, total: number | undefined) => void): Response {
+  if (!res.body) return res;
+  const header = res.headers.get('content-length');
+  const total = header === null ? undefined : Number(header);
+  let loaded = 0;
+  const body = res.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        loaded += chunk.byteLength;
+        onProgress(loaded, total);
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
 }
 
 function omit<T extends object, K extends string>(obj: T, keys: K[]): Omit<T, K> {

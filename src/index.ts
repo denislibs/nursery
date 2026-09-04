@@ -7,7 +7,7 @@ export type { Release, MapOptions, MapFn, QueueOptions, QueueAddOptions } from '
 export { latest, singleFlight } from './latest.js';
 export type { LatestFn, SingleFlightOptions } from './latest.js';
 export { Scope, ScopeClosedError, ScopeStuckError, ContextKey, contextKey } from './scope.js';
-export type { ScopeOptions, SpawnOptions, CloseOptions, ScopedTask, ContextBinding, TaskInfo, ScopeTree, UnhandledContext, UnhandledHandler } from './scope.js';
+export type { ScopeOptions, SpawnOptions, ChildOptions, CloseOptions, ScopedTask, ContextBinding, TaskInfo, ScopeTree, UnhandledContext, UnhandledHandler } from './scope.js';
 export { on, Channel, ChannelClosedError, select } from './events.js';
 export type { OnOptions, SelectResult, AnyChannel } from './events.js';
 export * as iter from './iter.js';
@@ -15,6 +15,6 @@ export type { Op, BufferSpec, FlatMapOptions } from './iter.js';
 export { yieldToMain, idle, frame, chunked, postTask } from './schedule.js';
 export type { IdleOptions, ChunkedOptions, PostTaskOptions, TaskPriority } from './schedule.js';
 export { createHttp, HttpError } from './http.js';
-export type { Http, HttpOptions, RequestOptions, RequestOwner, RequestCommon, BodyOptions, StreamOptions, SseOptions, SseEvent, Parser, RequestHookContext, Query } from './http.js';
-export { expose, wrap, transfer, callback } from './worker.js';
-export type { Endpoint, Remote } from './worker.js';
+export type { Http, HttpOptions, RequestOptions, RequestOwner, RequestCommon, BodyOptions, StreamOptions, SseOptions, SseEvent, Parser, RequestHookContext, RequestHook, Query, QueryValue } from './http.js';
+export { expose, wrap, transfer, callback, createPool } from './worker.js';
+export type { Endpoint, Remote, Pool, PoolOptions, PoolEndpoint } from './worker.js';

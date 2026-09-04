@@ -371,6 +371,150 @@ export async function* fromReadableStream<T>(stream: ReadableStream<T>): AsyncGe
   }
 }
 
+/** Pairs values by position; ends (and closes the others) when the shortest source ends. */
+export function zip<const S extends readonly AsyncIterable<unknown>[]>(
+  ...sources: S
+): AsyncIterable<{ -readonly [K in keyof S]: ValueOf<S[K]> }> {
+  type Tuple = { -readonly [K in keyof S]: ValueOf<S[K]> };
+  return {
+    async *[Symbol.asyncIterator]() {
+      const its = sources.map(s => s[Symbol.asyncIterator]());
+      try {
+        for (;;) {
+          const results = await Promise.all(its.map(it => it.next()));
+          if (results.some(r => r.done)) return;
+          yield results.map(r => r.value) as unknown as Tuple;
+        }
+      } finally {
+        await Promise.allSettled(its.map(it => Promise.resolve(it.return?.())));
+      }
+    },
+  };
+}
+
+/** Emits the latest value of every source once all have produced, then on every change. */
+export function combineLatest<const S extends readonly AsyncIterable<unknown>[]>(
+  ...sources: S
+): AsyncIterable<{ -readonly [K in keyof S]: ValueOf<S[K]> }> {
+  type Tuple = { -readonly [K in keyof S]: ValueOf<S[K]> };
+  return bridge<Tuple>(sink => {
+    const latest: unknown[] = Array.from({ length: sources.length });
+    const has: boolean[] = sources.map(() => false);
+    let open = sources.length;
+    if (open === 0) sink.end();
+    const stops = sources.map((src, i) =>
+      consume(src, {
+        value: v => {
+          latest[i] = v;
+          has[i] = true;
+          if (has.every(Boolean)) sink.emit([...latest] as unknown as Tuple);
+        },
+        end: () => {
+          if (--open === 0) sink.end();
+        },
+        error: err => {
+          sink.fail(err);
+          stopAll();
+        },
+      }),
+    );
+    const stopAll = () => {
+      for (const s of stops) s();
+    };
+    return stopAll;
+  });
+}
+
+interface Subscriber<T> {
+  queue: T[];
+  done: boolean;
+  failure?: { err: unknown };
+  wake?: () => void;
+}
+
+/**
+ * Multicasts one source to any number of consumers: the source is pulled once, each consumer
+ * sees values from the moment it joins. The source starts with the first consumer and is
+ * stopped when the last one leaves.
+ */
+export function share<T>(source: AsyncIterable<T>): AsyncIterable<T> {
+  const subscribers = new Set<Subscriber<T>>();
+  let stop: (() => void) | undefined;
+  let finished: { failure?: { err: unknown } } | undefined;
+
+  const broadcast = (fn: (s: Subscriber<T>) => void) => {
+    for (const s of subscribers) {
+      fn(s);
+      s.wake?.();
+      s.wake = undefined;
+    }
+  };
+  const start = () => {
+    stop = consume(source, {
+      value: v => broadcast(s => s.queue.push(v)),
+      end: () => {
+        finished = {};
+        broadcast(s => (s.done = true));
+      },
+      error: err => {
+        finished = { failure: { err } };
+        broadcast(s => {
+          s.failure = { err };
+          s.done = true;
+        });
+      },
+    });
+  };
+  const leave = (s: Subscriber<T>) => {
+    subscribers.delete(s);
+    if (subscribers.size === 0 && stop && !finished) {
+      stop();
+      stop = undefined;
+    }
+  };
+
+  return {
+    [Symbol.asyncIterator](): AsyncIterableIterator<T> {
+      const sub: Subscriber<T> = { queue: [], done: finished !== undefined, failure: finished?.failure };
+      if (!finished) {
+        subscribers.add(sub);
+        if (!stop) start();
+      }
+      let closed = false;
+      return {
+        async next() {
+          for (;;) {
+            if (closed) return { value: undefined, done: true };
+            if (sub.queue.length > 0) return { value: sub.queue.shift()!, done: false };
+            if (sub.failure) {
+              const { err } = sub.failure;
+              sub.failure = undefined;
+              closed = true;
+              leave(sub);
+              throw err;
+            }
+            if (sub.done) {
+              closed = true;
+              leave(sub);
+              return { value: undefined, done: true };
+            }
+            await new Promise<void>(r => (sub.wake = r));
+          }
+        },
+        async return() {
+          closed = true;
+          sub.queue.length = 0;
+          leave(sub);
+          return { value: undefined, done: true };
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+    },
+  };
+}
+
 // ---- push-to-pull plumbing -------------------------------------------------------------
 
 interface Sink<R> {

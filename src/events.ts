@@ -140,6 +140,43 @@ export class Channel<T> implements AsyncIterable<T> {
     });
   }
 
+  /** Delivers or buffers without waiting. Returns false when the channel is full. Throws if closed. */
+  trySend(value: T): boolean {
+    if (this.#closed) throw new ChannelClosedError();
+    const receiver = this.#receivers.shift();
+    if (receiver) {
+      receiver.detach();
+      receiver.resolve(value);
+      return true;
+    }
+    if (this.#buffer.length < this.#capacity) {
+      this.#buffer.push(value);
+      return true;
+    }
+    return false;
+  }
+
+  /** Takes a value if one is available (buffered or offered by a waiting sender) without waiting. */
+  tryReceive(): { ok: true; value: T } | { ok: false } {
+    if (this.#buffer.length > 0) {
+      const value = this.#buffer.shift()!;
+      const sender = this.#senders.shift();
+      if (sender) {
+        this.#buffer.push(sender.value);
+        sender.detach();
+        sender.resolve();
+      }
+      return { ok: true, value };
+    }
+    const sender = this.#senders.shift();
+    if (sender) {
+      sender.detach();
+      sender.resolve();
+      return { ok: true, value: sender.value };
+    }
+    return { ok: false };
+  }
+
   receive(signal?: MaybeSignal): Promise<T> {
     if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
     if (this.#buffer.length > 0) {

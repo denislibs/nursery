@@ -1,4 +1,5 @@
-import { abortError, type MaybeSignal } from './signal.js';
+import { abortError, anySignal, type MaybeSignal } from './signal.js';
+import { Queue } from './limit.js';
 
 /** Anything with postMessage + message events: Worker, MessagePort, DedicatedWorkerGlobalScope. */
 export interface Endpoint {
@@ -317,4 +318,111 @@ export function wrap<T>(endpoint: Endpoint): Remote<T> {
       return (...args: unknown[]) => call(prop, args);
     },
   });
+}
+
+export interface PoolOptions {
+  /** Max workers, created lazily. Default navigator.hardwareConcurrency or 4. */
+  size?: number;
+  /** Aborts running calls and rejects queued ones. */
+  signal?: MaybeSignal;
+}
+
+/** A worker-like endpoint the pool can terminate. */
+export interface PoolEndpoint extends Endpoint {
+  terminate?(): void;
+  close?(): void;
+}
+
+export interface Pool<T> extends Disposable {
+  /** Remote API: every call is queued and dispatched to the least busy worker. */
+  readonly api: Remote<T>;
+  /** Runs `fn` with a remote of a specific worker, under the pool's concurrency limit. */
+  run<R>(fn: (remote: Remote<T>, signal: AbortSignal) => Promise<R>, signal?: MaybeSignal): Promise<R>;
+  /** Workers created so far. */
+  readonly size: number;
+  /** Calls currently executing. */
+  readonly pending: number;
+  /** Calls waiting for a free worker. */
+  readonly queued: number;
+  dispose(): void;
+}
+
+function signalOf(args: unknown[]): AbortSignal | undefined {
+  const found: AbortSignal[] = [];
+  for (const a of args) {
+    if (a instanceof AbortSignal) found.push(a);
+    else if (isPlainObject(a)) for (const v of Object.values(a)) if (v instanceof AbortSignal) found.push(v);
+  }
+  return found.length === 0 ? undefined : found.length === 1 ? found[0] : anySignal(found);
+}
+
+/**
+ * Pool of workers behind one Remote<T>. Workers are created lazily from `factory`;
+ * calls queue when every worker is busy; an AbortSignal in the arguments cancels a queued
+ * call and, once running, the remote task.
+ */
+export function createPool<T>(factory: () => PoolEndpoint, opts: PoolOptions = {}): Pool<T> {
+  const size = Math.max(1, opts.size ?? (globalThis.navigator?.hardwareConcurrency || 4));
+  const workers: Array<{ endpoint: PoolEndpoint; remote: Remote<T>; active: number }> = [];
+  const queue = new Queue({ concurrency: size, signal: opts.signal });
+  let disposed = false;
+
+  const acquire = () => {
+    let best = workers.length > 0 ? workers.reduce((a, b) => (b.active < a.active ? b : a)) : undefined;
+    if ((!best || best.active > 0) && workers.length < size) {
+      const endpoint = factory();
+      best = { endpoint, remote: wrap<T>(endpoint), active: 0 };
+      workers.push(best);
+    }
+    return best!;
+  };
+
+  const run = <R>(fn: (remote: Remote<T>, signal: AbortSignal) => Promise<R>, signal?: MaybeSignal): Promise<R> => {
+    if (disposed) return Promise.reject(new Error('Worker pool is disposed'));
+    return queue.add(async sig => {
+      const w = acquire();
+      w.active++;
+      try {
+        return await fn(w.remote, sig);
+      } finally {
+        w.active--;
+      }
+    }, signal);
+  };
+
+  const api = new Proxy({} as Remote<T>, {
+    get(_t, prop) {
+      if (prop === 'then' || typeof prop === 'symbol') return undefined;
+      return (...args: unknown[]) =>
+        run(remote => (remote as unknown as Record<string, AnyFn>)[prop]!(...args) as Promise<unknown>, signalOf(args));
+    },
+  });
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    queue.clear();
+    for (const w of workers) {
+      w.remote[Symbol.dispose]();
+      if (w.endpoint.terminate) w.endpoint.terminate();
+      else w.endpoint.close?.();
+    }
+    workers.length = 0;
+  };
+
+  return {
+    api,
+    run,
+    get size() {
+      return workers.length;
+    },
+    get pending() {
+      return queue.pending;
+    },
+    get queued() {
+      return queue.size;
+    },
+    dispose,
+    [Symbol.dispose]: dispose,
+  };
 }

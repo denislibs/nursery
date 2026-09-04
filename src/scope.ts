@@ -36,6 +36,15 @@ export interface SpawnOptions {
   name?: string;
 }
 
+export interface ChildOptions {
+  /**
+   * Do not track the child in `parent.children`: the parent still cancels it through the
+   * signal but does not wait for it on close. Call `parent.adopt(child)` to start tracking.
+   * Useful when a framework may create and discard a scope before committing it (React StrictMode).
+   */
+  detached?: boolean;
+}
+
 export interface CloseOptions {
   /** Stop waiting after this many ms; stuck tasks are reported via Scope.onUnhandled. */
   grace?: number;
@@ -116,6 +125,25 @@ interface TaskRecord {
 const unhandledHandlers = new Set<UnhandledHandler>();
 let scopeCounter = 0;
 
+// Implicit "current scope": AsyncContext.Variable when the platform has it (survives awaits),
+// otherwise a synchronous stack that is only valid until the first await.
+interface AsyncVariable<T> {
+  get(): T | undefined;
+  run<R>(value: T, fn: () => R): R;
+}
+const AsyncContextVariable = (globalThis as { AsyncContext?: { Variable?: new <T>() => AsyncVariable<T> } }).AsyncContext?.Variable;
+const asyncVar: AsyncVariable<Scope> | undefined = AsyncContextVariable ? new AsyncContextVariable<Scope>() : undefined;
+let syncCurrent: Scope | undefined;
+
+type TaskStatus = 'ok' | 'error' | 'aborted';
+function measure(name: string, start: number, detail: Record<string, unknown>): void {
+  try {
+    performance.measure(name, { start, end: performance.now(), detail });
+  } catch {
+    // performance.measure with options is unavailable in very old engines; profiling is best-effort
+  }
+}
+
 function report(error: unknown, ctx: UnhandledContext): void {
   if (unhandledHandlers.size === 0) {
     // Default sink: nobody subscribed, so the error must at least reach the console.
@@ -133,10 +161,14 @@ function report(error: unknown, ctx: UnhandledContext): void {
  * - close() (or `await using`) aborts what is still running and waits for everything to settle.
  */
 export class Scope implements AsyncDisposable {
+  /** When true, every task and scope lifetime is recorded via performance.measure('scopekit:...'). */
+  static profiling = false;
+
   readonly name: string;
   readonly signal: AbortSignal;
   /** Absolute performance.now() deadline, the earliest of this scope's and its ancestors'. */
   readonly deadline: number | undefined;
+  readonly #createdAt = performance.now();
 
   #parent: Scope | undefined;
   #bindings = new Map<ContextKey<unknown>, unknown>();
@@ -152,6 +184,7 @@ export class Scope implements AsyncDisposable {
   #closed = false;
   #closing: Promise<void> | undefined;
   #taskCounter = 0;
+  #stuckCount = 0;
 
   constructor(opts: ScopeOptions = {}, parent?: Scope) {
     this.name = opts.name ?? `scope#${++scopeCounter}`;
@@ -172,6 +205,27 @@ export class Scope implements AsyncDisposable {
     }
   }
 
+  /**
+   * The scope whose task is currently executing. Reliable in the synchronous part of a task or
+   * of enter(); across awaits only where AsyncContext exists. Prefer passing the scope explicitly.
+   */
+  static current(): Scope | undefined {
+    return asyncVar ? asyncVar.get() : syncCurrent;
+  }
+
+  /** Runs `fn` with this scope as Scope.current(). */
+  enter<R>(fn: () => R): R {
+    if (asyncVar) return asyncVar.run(this, fn);
+    const prev = syncCurrent;
+    // oxlint-disable-next-line typescript/no-this-alias -- module-level "current scope" slot
+    syncCurrent = this;
+    try {
+      return fn();
+    } finally {
+      syncCurrent = prev;
+    }
+  }
+
   /** Subscribes to failures nobody handled and to stuck tasks. Returns an unsubscribe. */
   static onUnhandled(handler: UnhandledHandler): () => void {
     unhandledHandlers.add(handler);
@@ -184,7 +238,7 @@ export class Scope implements AsyncDisposable {
     scope.#surfaces = true;
     let result: T;
     try {
-      result = await body(scope);
+      result = await scope.enter(() => body(scope));
     } catch (err) {
       await scope.close();
       // The body usually dies of the AbortError caused by a failing sibling; surface the cause.
@@ -234,9 +288,17 @@ export class Scope implements AsyncDisposable {
   /** Runs `task` with this scope's signal. Failure aborts the siblings. */
   spawn<T>(task: ScopedTask<T>, opts: SpawnOptions = {}): Promise<T> {
     if (this.#closed) return Promise.reject(new ScopeClosedError());
-    const inner = (async () => task(this.signal, this))();
+    const inner = this.enter(() => (async () => task(this.signal, this))());
     const rec: TaskRecord = { name: opts.name ?? `task#${++this.#taskCounter}`, startedAt: performance.now(), inner };
     this.#tasks.add(rec);
+    if (Scope.profiling) {
+      const record = (status: TaskStatus) =>
+        measure(`scopekit:${this.name}/${rec.name}`, rec.startedAt, { scope: this.name, task: rec.name, status });
+      inner.then(
+        () => record('ok'),
+        err => record(isAbort(err) ? 'aborted' : 'error'),
+      );
+    }
     const outer = new TrackedPromise<T>((resolve, reject) => {
       inner.then(resolve, reject);
     });
@@ -263,10 +325,16 @@ export class Scope implements AsyncDisposable {
   }
 
   /** A nested scope: inherits ctx, cancellation and deadline; closing the parent waits for it. */
-  child(opts: ScopeOptions = {}): Scope {
+  child(opts: ScopeOptions = {}, childOpts: ChildOptions = {}): Scope {
     const scope = new Scope(opts, this);
-    this.#children.add(scope);
+    if (!childOpts.detached) this.#children.add(scope);
     return scope;
+  }
+
+  /** Starts tracking a child created with `{ detached: true }`. Idempotent. */
+  adopt(child: Scope): void {
+    if (child.#parent !== this) throw new TypeError('adopt(): scope is not a child of this scope');
+    if (!child.#closed && !this.#closed) this.#children.add(child);
   }
 
   /** Registers cleanup run on close(), after children settle, in reverse order. */
@@ -337,6 +405,7 @@ export class Scope implements AsyncDisposable {
     }
     if (this.#parent) this.#parent.#children.delete(this);
     this.#unlink();
+    if (Scope.profiling) measure(`scopekit:${this.name}`, this.#createdAt, { scope: this.name, stuck: this.#stuckCount });
   }
 
   async #awaitSettled(grace: number | undefined): Promise<void> {
@@ -347,6 +416,7 @@ export class Scope implements AsyncDisposable {
     clearTimeout(timer);
     if (outcome === 'settled') return;
     const stuck = this.#collectStuck();
+    this.#stuckCount = stuck.length;
     if (stuck.length > 0) report(new ScopeStuckError(this.name, stuck), { scope: this });
     // Detach: cleanups still run, but we stop waiting for tasks that will never finish.
     this.#tasks.clear();

@@ -8,7 +8,7 @@ const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
 const entries = Object.entries(pkg.exports).filter(
   (e): e is [string, { types: string; import: string }] => typeof e[1] === 'object',
 );
-const modules = ['signal', 'combine', 'limit', 'latest', 'scope', 'events', 'iter', 'schedule', 'http', 'worker', 'react', 'vue'];
+const modules = ['signal', 'combine', 'limit', 'latest', 'scope', 'events', 'iter', 'schedule', 'http', 'worker', 'react', 'vue', 'testing'];
 
 describe('package exports map', () => {
   test('exposes a subpath for every module plus the root', () => {
