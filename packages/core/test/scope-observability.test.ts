@@ -124,6 +124,7 @@ describe('onUnhandled', () => {
 
   test('unsubscribe stops delivery', async () => {
     unsubscribe();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {}); // default sink, expected here
     const scope = new Scope();
     scope.spawn(async () => {
       throw new Error('silent');
@@ -131,6 +132,7 @@ describe('onUnhandled', () => {
     await tick();
     await tick();
     expect(reports).toEqual([]);
+    quiet.mockRestore();
   });
 });
 

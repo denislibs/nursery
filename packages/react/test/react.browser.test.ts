@@ -98,7 +98,7 @@ describe('useLatest', () => {
     let api!: ReturnType<typeof useLatest<string, string>>;
     function C() {
       api = useLatest(async (q: string, signal) => {
-        await sleep(q === 'a' ? 50 : 5, signal);
+        await sleep(q === 'a' ? 500 : 150, signal);
         return q;
       });
       return null;
@@ -119,7 +119,7 @@ describe('useLatest', () => {
         });
     });
     expect(api.pending).toBe(true);
-    await act(() => sleep(80));
+    await act(() => sleep(400));
     expect(results).toEqual(['ab']);
     expect(api.pending).toBe(false);
   });
