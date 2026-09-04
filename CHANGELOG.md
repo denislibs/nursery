@@ -21,6 +21,9 @@ First release candidate. Packages: `@nursery/core`, `@nursery/react`, `@nursery/
 - `worker`: `expose`/`wrap` with cancellation, callbacks and transferables at any depth,
   `createPool`.
 - `diagnostics` warnings and a `testing` module.
+- `http`: relative urls resolve against the page when no `baseUrl` is set; retries with
+  `onUploadProgress` rebuild the body stream per attempt; retry hooks receive `HttpError`;
+  `stream()`/`sse()` readers stop on abort without waiting for the next chunk.
 
 ### Adapters
 - React, Vue, Solid, Svelte 5 and Angular bindings tested in a real browser.

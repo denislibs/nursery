@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery showcase</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <section class="index-list">
+    <a class="card" href="./search.html"><h2>Поиск без гонок</h2><p class="note">Две панели рядом: наивный fetch и <code>latest()</code>. Таймлайн запросов показывает, кто отменён, а кто перетёр результат.</p><div class="pain">боль: ответ на «re» приходит после «react» и перетирает список</div><div class="fix">latest, debounce через iter, отмена через AbortSignal</div></a>
+    <a class="card" href="./table.html"><h2>50 000 строк без фриза</h2><p class="note">Синхронный цикл замораживает вкладку, <code>chunked</code> рендерит с бюджетом по частоте экрана. Счётчик fps и кнопка «нажми меня» показывают разницу.</p><div class="pain">боль: long task на секунды, ввод не обрабатывается</div><div class="fix">chunked с auto-бюджетом, yieldToMain, isInputPending</div></a>
+    <a class="card" href="./uploads.html"><h2>Менеджер загрузок</h2><p class="note">Очередь с лимитом, приоритеты, пауза, отмена, ретраи с backoff и прогресс на потоковом теле.</p><div class="pain">боль: 40 параллельных запросов, невозможно поставить на паузу или отменить</div><div class="fix">Queue, retry, onUploadProgress, Semaphore</div></a>
+    <a class="card" href="./workers.html"><h2>Обработка изображения в пуле воркеров</h2><p class="note">Тайлы разлетаются по воркерам, прогресс через колбэки, буферы переезжают без копирования, отмена доходит до воркера.</p><div class="pain">боль: Comlink не умеет отменять, прогресс и transfer приходится городить руками</div><div class="fix">createPool, callback, transfer, AbortSignal в воркере</div></a>
+    <a class="card" href="./dashboard.html"><h2>Nursery: дерево жизни</h2><p class="note">Виджеты со своими nursery, SSE с реконнектом, дедлайны, fail-fast, зависшая задача и grace, живой <code>dump()</code>.</p><div class="pain">боль: кто держит страницу открытой и почему запрос ушёл после unmount</div><div class="fix">Nursery, child, close({ grace }), onUnhandled, inspect</div></a>
+    <a class="card" href="./gestures.html"><h2>Жесты как код</h2><p class="note">Рисование, drag-and-drop и «удерживай для подтверждения» на <code>for await</code> по событиям, без флагов и трёх обработчиков.</p><div class="pain">боль: isDragging, removeEventListener, гонки между pointerup и таймером</div><div class="fix">on, pipe, throttle, race, sleep</div></a>
+  </section>
+</div>
+<script type="module">
+  import { mountHeader } from '/src/lib/page.ts';
+  mountHeader('index', 'showcase', 'Каждая страница это одна боль браузерной асинхронщины и то, как она решается. Всё работает против встроенного фейкового бэкенда с честно плохой задержкой и случайными ошибками, сети не нужно.');
+</script>
+</body></html>

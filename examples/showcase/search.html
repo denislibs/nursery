@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · гонки</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="row">
+    <input id="q" type="text" placeholder="печатайте быстро: n, nu, nur, nurs…" autocomplete="off" />
+    <label class="inline"><input id="debounce" type="checkbox" checked /> debounce 150 мс для правой панели</label>
+    <button id="storm">Шторм: 8 нажатий за 400 мс</button>
+  </div>
+  <div class="grid two">
+    <section class="card">
+      <h2>Наивный fetch <span class="tag bad">без отмены</span></h2>
+      <p class="note">Каждое нажатие делает запрос, рендерится любой пришедший ответ. Жёлтое означает, что список показывает результат для устаревшего запроса.</p>
+      <div class="stat">в полёте: <b id="naive-inflight">0</b> · перетёрто устаревшим: <b id="naive-stale">0</b></div>
+      <ul id="naive-results" class="results"></ul>
+      <div id="naive-timeline" class="timeline"></div>
+    </section>
+    <section class="card">
+      <h2>latest() <span class="tag good">новый вызов отменяет старый</span></h2>
+      <p class="note">Красные полосы это отменённые запросы: их ответ никогда не дойдёт до рендера. Сеть тоже освобождается, потому что AbortSignal доходит до fetch.</p>
+      <div class="stat">в полёте: <b id="latest-inflight">0</b> · отменено: <b id="latest-cancelled">0</b> · перетёрто: <b>0</b></div>
+      <ul id="latest-results" class="results"></ul>
+      <div id="latest-timeline" class="timeline"></div>
+    </section>
+  </div>
+  <section class="card"><h2>Код правой панели</h2><pre class="code">const search = latest((q, signal) =&gt; http.get('/search', { signal, query: { q } }));
+
+for await (const e of pipe(on(input, 'input', { signal }), debounce(150))) {
+  search(e.target.value).then(render).catch(ignoreAbort);   <span class="c">// старый ответ никогда не перетрёт новый</span>
+}</pre></section>
+</div>
+<script type="module" src="/src/demos/search.ts"></script>
+</body></html>

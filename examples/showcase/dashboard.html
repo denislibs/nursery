@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · дерево жизни</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="row">
+    <button id="add-status" class="primary">+ виджет статуса (дедлайн 1.5 с)</button>
+    <button id="add-flaky">+ виджет с fail-fast</button>
+    <button id="add-stuck">+ виджет с зависшей задачей</button>
+    <button id="close-page" class="danger">Закрыть страницу (grace 2 с)</button>
+    <label class="inline"><input id="profiling" type="checkbox" /> Nursery.profiling → Performance</label>
+  </div>
+  <div class="grid three">
+    <section class="card" style="grid-column: span 2">
+      <h2>Виджеты</h2>
+      <div id="widgets" class="grid two"></div>
+    </section>
+    <section class="card">
+      <h2>page.dump() <span class="tag">живое дерево</span></h2>
+      <div id="tree" class="tree"></div>
+    </section>
+  </div>
+  <div class="grid two" style="margin-top:16px">
+    <section class="card"><h2>Nursery.onUnhandled</h2><p class="note">Сюда попадают ошибки задач, которых никто не ждал, и зависшие задачи после grace.</p><div id="log" class="log"></div></section>
+    <section class="card"><h2>Код</h2><pre class="code">const page = new Nursery({ name: 'page', grace: 2000 });
+const widget = page.child({ name: 'status', timeout: 1500 });
+widget.spawn(sig => http.get('/status', { signal: sig }), { name: 'poll' });
+
+for await (const e of http.sse('/ticker', { nursery: widget, reconnect: { delay: 500 } })) render(e);
+
+await page.close();          <span class="c">// всё дерево: отмена, ожидание, cleanup, отчёт о зависших</span></pre></section>
+  </div>
+</div>
+<script type="module" src="/src/demos/dashboard.ts"></script>
+</body></html>

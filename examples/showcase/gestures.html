@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · жесты</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="grid two">
+    <section class="card">
+      <h2>Рисование <span class="tag">on · pipe · throttle</span></h2>
+      <p class="note">Каждый штрих это один <code>for await</code> по <code>pointermove</code>, который заканчивается на <code>pointerup</code>. Никаких флагов и снятия обработчиков.</p>
+      <canvas id="board" class="board"></canvas>
+      <div class="row"><button id="clear">Очистить</button><span class="stat">штрихов: <b id="strokes">0</b> · точек: <b id="points">0</b></span></div>
+      <pre class="code">for await (const down of on(canvas, 'pointerdown', { signal })) {
+  const stroke = new AbortController();
+  on(canvas, 'pointerup', { signal: stroke.signal })[Symbol.asyncIterator]().next().then(() => stroke.abort());
+  for await (const move of pipe(on(canvas, 'pointermove', { signal: stroke.signal, buffer: 1 }), throttle(8))) {
+    line(prev, move);
+  }
+}</pre>
+    </section>
+    <section class="card">
+      <h2>Удерживай для подтверждения <span class="tag">race · sleep</span></h2>
+      <p class="note">Гонка между «отпустил» и «прошло 1200 мс». Проигравший отменяется, поэтому таймер не срабатывает после раннего отпускания.</p>
+      <div class="row"><button id="hold" class="hold primary" style="min-width:260px"><i></i>удерживай 1.2 с</button><span class="stat" id="hold-st"></span></div>
+      <pre class="code">const outcome = await race([
+  sig =&gt; once(button, 'pointerup', sig).then(() =&gt; 'released'),
+  sig =&gt; sleep(1200, sig).then(() =&gt; 'confirmed'),
+]);</pre>
+      <h2 style="margin-top:18px">Перетаскивание списка <span class="tag">on · for await</span></h2>
+      <ul id="sortable" class="sortable"></ul>
+      <div id="log" class="log" style="margin-top:12px;height:120px"></div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/src/demos/gestures.ts"></script>
+</body></html>

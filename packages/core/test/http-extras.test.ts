@@ -46,6 +46,29 @@ describe('query serialization', () => {
   });
 });
 
+describe('relative urls without baseUrl', () => {
+  const inBrowser = typeof window !== 'undefined';
+  afterEach(() => vi.unstubAllGlobals());
+  test('resolve against the page location', async () => {
+    if (!inBrowser) vi.stubGlobal('location', { href: 'https://app.test/dashboard/index.html' });
+    const base = (globalThis as { location: { href: string } }).location.href;
+    const f = fakeFetch(() => json({}));
+    const http = createHttp({ fetch: f.fn });
+    await http.get('/api/items', { signal: sig(), query: { a: 1 } });
+    await http.get('rel/path', { signal: sig() });
+    expect(f.calls[0]!.url).toBe(new URL('/api/items?a=1', base).href);
+    expect(f.calls[1]!.url).toBe(new URL('rel/path', base).href);
+  });
+  test.skipIf(inBrowser)(
+    'reject with a clear TypeError when there is nothing to resolve against',
+    async () => {
+      vi.stubGlobal('location', undefined);
+      const http = createHttp({ fetch: fakeFetch(() => json({})).fn });
+      await expect(http.get('/api/items', { signal: sig() })).rejects.toThrow(/baseUrl/);
+    },
+  );
+});
+
 describe('baseUrl per request', () => {
   test('request baseUrl overrides the client one', async () => {
     const f = fakeFetch(() => json({}));

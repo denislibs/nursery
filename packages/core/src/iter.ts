@@ -411,13 +411,26 @@ export function timeout<T>(ms: number): Op<T, T> {
     });
 }
 
-/** Iterates a ReadableStream (Safari lacks the native async iterator). Cancels it on early exit. */
-export async function* fromReadableStream<T>(stream: ReadableStream<T>): AsyncGenerator<T, void, undefined> {
+/**
+ * Iterates a ReadableStream (Safari lacks the native async iterator). Cancels it on early exit,
+ * and on `signal` abort: a pending read() rejects with the abort reason instead of waiting for
+ * the producer's next chunk.
+ */
+export async function* fromReadableStream<T>(
+  stream: ReadableStream<T>,
+  signal?: AbortSignal,
+): AsyncGenerator<T, void, undefined> {
+  if (signal?.aborted) throw signal.reason;
   const reader = stream.getReader();
   let done = false;
+  const onAbort = () => {
+    void reader.cancel(signal!.reason).catch(() => {});
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
   try {
     for (;;) {
       const r = await reader.read();
+      if (signal?.aborted) throw signal.reason;
       if (r.done) {
         done = true;
         return;
@@ -425,6 +438,7 @@ export async function* fromReadableStream<T>(stream: ReadableStream<T>): AsyncGe
       yield r.value;
     }
   } finally {
+    signal?.removeEventListener('abort', onAbort);
     if (!done) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }

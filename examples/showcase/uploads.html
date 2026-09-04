@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · очередь</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="row">
+    <button id="add" class="primary">Добавить 12 файлов</button>
+    <button id="pause">Пауза</button>
+    <button id="resume" disabled>Продолжить</button>
+    <button id="clear" class="danger">Отменить ожидающие</button>
+    <label class="inline">параллельно <input id="conc" type="range" min="1" max="6" value="3" /> <b id="conc-v">3</b></label>
+    <span class="stat">ждут: <b id="queued">0</b> · идут: <b id="pending">0</b> · готово: <b id="done">0</b> · ретраев: <b id="retries">0</b></span>
+  </div>
+  <div class="grid two">
+    <section class="card">
+      <h2>Файлы <span class="tag">Queue · retry · onUploadProgress</span></h2>
+      <p class="note">Сервер читает тело медленно и иногда отвечает 503. Кнопка ★ поднимает приоритет ожидающего файла, × отменяет конкретный, пауза не трогает уже идущие.</p>
+      <div id="files" class="files"></div>
+    </section>
+    <section class="card">
+      <h2>Код</h2>
+      <pre class="code">const uploads = new Queue({ concurrency: 3, signal: page.signal });
+
+uploads.add(sig => http.post('/upload', {
+  signal: sig, body: file,
+  retry: { retries: 3, delay: 300, onRetry: (e, n, wait) => log(...) },
+  onUploadProgress: (sent, total) => bar.style.width = `${sent / total * 100}%`,
+}), { priority: starred ? 10 : 0, signal: fileCtrl.signal });
+
+uploads.pause(); uploads.resume(); uploads.clear();</pre>
+      <div id="log" class="log" style="margin-top:12px"></div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/src/demos/uploads.ts"></script>
+</body></html>

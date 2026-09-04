@@ -7,3 +7,4 @@ docs/api/node_modules/
 docs/api/dist/
 examples/*/node_modules/
 examples/*/dist/
+.claude/

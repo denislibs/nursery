@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · воркеры</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="row">
+    <button id="main" class="danger">На главном потоке (замрёт)</button>
+    <button id="pool" class="primary">В пуле воркеров</button>
+    <button id="cancel" disabled>Отменить</button>
+    <label class="inline">радиус <input id="radius" type="range" min="4" max="24" value="12" /> <b id="radius-v">12</b></label>
+    <span id="fps" class="fps">— fps</span>
+    <span class="stat">воркеров: <b id="size">0</b> · тайлов готово: <b id="tiles-done">0</b>/16 · заняло: <b id="took">—</b></span>
+  </div>
+  <div class="grid two">
+    <section class="card">
+      <h2>Размытие 1600×1600 по тайлам <span class="tag">createPool · transfer · callback</span></h2>
+      <canvas id="img" class="img" width="1600" height="1600"></canvas>
+    </section>
+    <section class="card">
+      <h2>Прогресс по тайлам</h2>
+      <p class="note">Каждый тайл уезжает в воркер через <code>transfer</code> без копирования, прогресс возвращается колбэком, результат переезжает обратно. Отмена доходит до цикла в воркере через AbortSignal.</p>
+      <div id="tiles" class="tiles"></div>
+      <pre class="code" style="margin-top:12px">const pool = createPool&lt;typeof api&gt;(() =&gt; new Worker(url, { type: 'module' }));
+
+await map(tiles, (tile, _i, signal) =&gt; pool.api.blur(
+  transfer({ pixels, w, h, radius }, [pixels.buffer]),
+  { signal, onProgress: callback(p =&gt; bar(tile, p)) },
+), { concurrency: pool.size, signal });</pre>
+      <div id="log" class="log" style="margin-top:12px;height:120px"></div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/src/demos/workers.ts"></script>
+</body></html>

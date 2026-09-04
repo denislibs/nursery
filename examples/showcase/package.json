@@ -1,0 +1,8 @@
+{
+  "name": "nursery-showcase",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build", "preview": "vite preview" },
+  "dependencies": { "@nursery/core": "file:../../packages/core" },
+  "devDependencies": { "typescript": "7.0.2", "vite": "^8.0.0" }
+}

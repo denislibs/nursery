@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>nursery · главный поток</title><link rel="stylesheet" href="/src/ui.css"></head>
+<body><div class="wrap">
+  <div class="row">
+    <button id="sync" class="danger">Синхронно: 50 000 строк</button>
+    <button id="chunked" class="primary">chunked: 50 000 строк</button>
+    <button id="cancel" disabled>Отменить</button>
+    <button id="click">Нажми меня во время рендера: <b id="clicks">0</b></button>
+    <span id="fps" class="fps">— fps</span>
+    <div class="spinner" title="CSS-анимация замирает вместе с главным потоком"></div>
+  </div>
+  <div class="grid two">
+    <section class="card">
+      <h2>Что происходит</h2>
+      <p class="note">Синхронный цикл строит DOM одним long task: fps падает в ноль, спиннер замирает, клики копятся и срабатывают после. <code>chunked</code> уступает главный поток каждые полкадра: интервал кадра измеряется по <code>requestAnimationFrame</code>, а в Chromium цикл ещё уступает сразу, если есть ожидающий ввод.</p>
+      <div class="stat">интервал кадра: <b id="frame">…</b> · бюджет: <b id="budget">…</b> · отрендерено: <b id="count">0</b> · заняло: <b id="took">—</b></div>
+      <div class="bar" style="margin-top:10px"><i id="progress"></i></div>
+      <div id="log" class="log" style="margin-top:12px;height:140px"></div>
+    </section>
+    <section class="card">
+      <h2>Код</h2>
+      <pre class="code">for await (const row of chunked(rows, { signal })) {
+  tbody.append(renderRow(row));
+}
+<span class="c">// budget: 'auto' = frameInterval() / 2; yieldToMain() между кусками</span></pre>
+      <div class="tablewrap" style="margin-top:12px"><table class="data"><tbody id="tbody"></tbody></table></div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/src/demos/table.ts"></script>
+</body></html>

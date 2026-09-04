@@ -146,8 +146,11 @@ const DEFAULT_IDEMPOTENT = ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'];
 
 /** Thrown internally to route a retryable status through retry(). */
 class RetryableStatus extends Error {
+  /** What retry hooks see: status and a cloned response; the body is not parsed on the retry path. */
+  readonly httpError: HttpError;
   constructor(readonly response: Response) {
     super(`Retryable status ${response.status}`);
+    this.httpError = new HttpError(response.clone(), undefined);
   }
 }
 
@@ -177,10 +180,15 @@ export function createHttp(options: HttpOptions = {}): Http {
 
   function buildUrl(url: string, query: Query | undefined, base: string | undefined): string {
     const absolute = /^[a-z][a-z0-9+.-]*:/i.test(url);
-    const u =
-      absolute || !base
-        ? new URL(url)
-        : new URL(url.replace(/^\//, ''), base.endsWith('/') ? base : base + '/');
+    // relative paths resolve against baseUrl, else against the page (browsers), else it is an error
+    const origin = base ?? (globalThis as { location?: { href?: string } }).location?.href;
+    if (!absolute && !origin)
+      throw new TypeError(`http: relative url "${url}" needs a baseUrl (no location to resolve against)`);
+    const u = absolute
+      ? new URL(url)
+      : base
+        ? new URL(url.replace(/^\//, ''), base.endsWith('/') ? base : base + '/')
+        : new URL(url, origin);
     if (query) {
       const extra = new URLSearchParams(querySerializer(query));
       extra.forEach((v, k) => u.searchParams.append(k, v));
@@ -190,12 +198,16 @@ export function createHttp(options: HttpOptions = {}): Http {
 
   async function performOnce(
     url: string,
-    init: RequestInit,
+    init: RequestInit & { bodyFactory?: () => BodyInit },
     signal: AbortSignal,
     attempt: number,
   ): Promise<Response> {
     let finalUrl = url;
-    let finalInit: RequestInit = { ...init, signal };
+    const { bodyFactory, ...plain } = init;
+    // a streamed body can be read once: build a fresh one for every attempt
+    let finalInit: RequestInit = bodyFactory
+      ? { ...plain, body: bodyFactory(), signal }
+      : { ...plain, signal };
     for (const hook of requestHooks) {
       const patch = await hook(finalUrl, finalInit);
       if (patch?.url) finalUrl = patch.url;
@@ -206,6 +218,9 @@ export function createHttp(options: HttpOptions = {}): Http {
     if (retryStatuses.includes(res.status)) throw new RetryableStatus(res);
     return res;
   }
+
+  // hooks see an HttpError, not the internal marker
+  const publicError = (err: unknown) => (err instanceof RetryableStatus ? err.httpError : err);
 
   function withRetry(
     url: string,
@@ -221,10 +236,11 @@ export function createHttp(options: HttpOptions = {}): Http {
           ...policy,
           attemptTimeout,
           signal,
+          onRetry: policy.onRetry ? (err, n, d) => policy.onRetry!(publicError(err), n, d) : undefined,
           retryOn: (err, n) => {
             if (err instanceof RetryableStatus) {
               const after = retryAfterMs(err.response);
-              const custom = policy.retryOn?.(err, n) ?? true;
+              const custom = policy.retryOn?.(err.httpError, n) ?? true;
               if (custom === false) return false;
               return after ?? custom;
             }
@@ -335,15 +351,22 @@ export function createHttp(options: HttpOptions = {}): Http {
     const m = method.toUpperCase();
     const headers = new Headers(defaultHeaders);
     new Headers(reqHeaders).forEach((v, k) => headers.set(k, v));
-    let encoded = encodeBody(body, headers);
+    const encoded = encodeBody(body, headers);
     const fullUrl = buildUrl(url, query, reqBase ?? baseUrl);
-    const init: RequestInit & { duplex?: 'half' } = { ...rest, method: m, headers, body: encoded };
+    const init: RequestInit & { duplex?: 'half'; bodyFactory?: () => BodyInit } = {
+      ...rest,
+      method: m,
+      headers,
+      body: encoded,
+    };
     if (onUploadProgress && encoded !== undefined) {
-      const streamed = uploadStream(encoded, onUploadProgress);
-      if (streamed) {
-        init.body = streamed;
+      const source = encoded;
+      const probe = uploadStream(source, () => {});
+      if (probe) {
+        void probe.cancel();
+        init.body = undefined;
+        init.bodyFactory = () => uploadStream(source, onUploadProgress)!;
         init.duplex = 'half';
-        encoded = streamed;
       }
     }
     const policy = reqRetry ?? (idempotentMethods.includes(m) ? defaultRetry : undefined);
@@ -379,10 +402,22 @@ export function createHttp(options: HttpOptions = {}): Http {
     url: string,
     opts: RequestOwner & StreamOptions,
   ): AsyncGenerator<T, void, undefined> {
-    const res = await openStream(url, opts);
-    for await (const line of lines(res.body!)) {
-      if (line.trim() === '') continue;
-      yield JSON.parse(line) as T;
+    const signal = ownerSignal(opts);
+    let res: Response;
+    try {
+      res = await openStream(url, opts);
+    } catch (err) {
+      if (signal?.aborted) return; // like on(): the owner's abort ends the iteration
+      throw err;
+    }
+    try {
+      for await (const line of lines(res.body!, signal)) {
+        if (line.trim() === '') continue;
+        yield JSON.parse(line) as T;
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
+      throw err;
     }
   }
 
@@ -395,8 +430,7 @@ export function createHttp(options: HttpOptions = {}): Http {
     const maxDelay = reconnect?.maxDelay ?? 30_000;
     const factor = reconnect?.factor ?? 2;
     const shouldReconnect = reconnect?.retryOn ?? defaultSseRetryOn;
-    const signal =
-      (opts as { signal?: AbortSignal }).signal ?? (opts as { nursery?: Nursery }).nursery?.signal;
+    const signal = ownerSignal(opts);
     let lastEventId: string | undefined;
     let serverRetry: number | undefined;
     let wait = baseDelay;
@@ -418,6 +452,7 @@ export function createHttp(options: HttpOptions = {}): Http {
       try {
         res = await openStream(url, { ...rest, headers, cache: 'no-store' });
       } catch (err) {
+        if (signal?.aborted) return; // like on(): the owner's abort ends the iteration
         if (!reconnect || isAbort(err) || !shouldReconnect(err)) throw err;
         await backoff(err);
         continue;
@@ -431,7 +466,7 @@ export function createHttp(options: HttpOptions = {}): Http {
       let data: string[] = [];
       let retryField: number | undefined;
       try {
-        for await (const line of lines(res.body!)) {
+        for await (const line of lines(res.body!, signal)) {
           if (line === '') {
             if (data.length > 0) {
               if (id !== undefined) lastEventId = id;
@@ -457,11 +492,17 @@ export function createHttp(options: HttpOptions = {}): Http {
           }
         }
       } catch (err) {
+        if (signal?.aborted) return;
         if (isAbort(err) || !reconnect || !shouldReconnect(err)) throw err;
         failure = err;
       }
       if (!reconnect || signal?.aborted) return;
-      await backoff(failure);
+      try {
+        await backoff(failure);
+      } catch (err) {
+        if (signal?.aborted) return;
+        throw err;
+      }
     }
   }
 
@@ -476,6 +517,12 @@ export function createHttp(options: HttpOptions = {}): Http {
     stream,
     sse,
   };
+}
+
+function ownerSignal(opts: RequestOwner): AbortSignal | undefined {
+  const explicit = (opts as { signal?: AbortSignal }).signal;
+  const nursery = (opts as { nursery?: Nursery }).nursery;
+  return explicit && nursery ? anySignal([explicit, nursery.signal]) : (explicit ?? nursery?.signal);
 }
 
 function defaultSseRetryOn(err: unknown): boolean {
@@ -579,10 +626,13 @@ function encodeBody(body: unknown, headers: Headers): BodyInit | undefined {
 }
 
 /** Splits a byte stream into text lines (\\n or \\r\\n), flushing a trailing partial line. */
-async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string, void, undefined> {
+async function* lines(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<string, void, undefined> {
   const decoder = new TextDecoder();
   let buf = '';
-  for await (const chunk of fromReadableStream(body)) {
+  for await (const chunk of fromReadableStream(body, signal)) {
     buf += decoder.decode(chunk, { stream: true });
     let nl: number;
     while ((nl = buf.indexOf('\n')) !== -1) {

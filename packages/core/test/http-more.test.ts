@@ -222,7 +222,7 @@ describe('streams', () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(0);
-    await loop;
+    await loop; // the owner's abort ends the iteration, like on()
     expect(seen).toEqual(['first', 'second']);
     expect(new Headers(f.calls[1]!.init.headers).get('last-event-id')).toBe('9');
     vi.useRealTimers();
