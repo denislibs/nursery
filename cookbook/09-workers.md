@@ -206,3 +206,16 @@ pool.dispose();                                        // или `using pool = c
 
 Воркеры создаются лениво, до `size`. `AbortSignal` в аргументах снимает вызов с очереди, а
 если он уже выполняется, доезжает до воркера.
+
+## Колбэки и transfer на любой глубине
+
+`callback()` и `transfer()` работают внутри массивов и вложенных объектов, в аргументах и
+результатах колбэков, а колбэк может принимать колбэк:
+
+```ts
+await remote.run(files.map(f => ({ file: transfer(f, [f.buffer]), onDone: callback(markDone) })));
+await remote.produce(callback(async (chunk: ArrayBuffer) => transfer(process(chunk), [chunk])));
+```
+
+Ограничение: сигналы, колбэки и transfer ищутся в plain-объектах и массивах. Внутри `Map`,
+`Set` или экземпляров классов они не найдутся, потому что structured clone не сохранит их.

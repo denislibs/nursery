@@ -159,3 +159,14 @@ await expect(p).rejects.toThrow('x');
 
 Обработчик до `runAllTimersAsync` обязателен: иначе промис отвергнется, когда на нём ещё
 нет `catch`, и vitest сочтёт это unhandled rejection.
+
+## onRetry: логировать попытки
+
+```ts
+await retry(sig => api.report(sig), {
+  retries: 3,
+  onRetry: (err, attempt, delayMs) => metrics.retry({ op: 'report', attempt, delayMs, reason: String(err) }),
+});
+```
+
+`retryOn` решает, `onRetry` наблюдает. Побочные эффекты в предикате больше не нужны.

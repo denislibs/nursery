@@ -1,7 +1,11 @@
 import { yieldToMain, idle, frame, chunked } from '../src/schedule.js';
 import { isAbort } from '../src/signal.js';
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 describe('yieldToMain', () => {
   test('uses scheduler.yield when available', async () => {
@@ -28,12 +32,18 @@ describe('yieldToMain', () => {
 describe('idle', () => {
   test('uses requestIdleCallback and resolves with the deadline', async () => {
     const deadline = { didTimeout: false, timeRemaining: () => 42 };
-    vi.stubGlobal('requestIdleCallback', (cb: (d: unknown) => void) => { cb(deadline); return 1; });
+    vi.stubGlobal('requestIdleCallback', (cb: (d: unknown) => void) => {
+      cb(deadline);
+      return 1;
+    });
     vi.stubGlobal('cancelIdleCallback', vi.fn());
     await expect(idle()).resolves.toBe(deadline);
   });
   test('passes timeout through to requestIdleCallback', async () => {
-    const ric = vi.fn((cb: (d: unknown) => void) => { cb({}); return 1; });
+    const ric = vi.fn((cb: (d: unknown) => void) => {
+      cb({});
+      return 1;
+    });
     vi.stubGlobal('requestIdleCallback', ric);
     await idle({ timeout: 500 });
     expect(ric).toHaveBeenCalledWith(expect.any(Function), { timeout: 500 });
@@ -58,7 +68,10 @@ describe('idle', () => {
 
 describe('frame', () => {
   test('uses requestAnimationFrame and resolves with the timestamp', async () => {
-    vi.stubGlobal('requestAnimationFrame', (cb: (t: number) => void) => { cb(123.4); return 1; });
+    vi.stubGlobal('requestAnimationFrame', (cb: (t: number) => void) => {
+      cb(123.4);
+      return 1;
+    });
     await expect(frame()).resolves.toBe(123.4);
   });
   test('falls back to a ~16ms timer', async () => {
@@ -102,16 +115,27 @@ describe('chunked', () => {
     const y = vi.fn(() => Promise.resolve());
     vi.stubGlobal('scheduler', { yield: y });
     vi.spyOn(performance, 'now').mockImplementation(() => 0);
-    for await (const _ of chunked([1, 2, 3], { budget: 8 })) { /* fast */ }
+    for await (const _ of chunked([1, 2, 3], { budget: 8 })) {
+      /* fast */
+    }
     expect(y).not.toHaveBeenCalled();
   });
   test('accepts an iterable and stops on abort', async () => {
     const c = new AbortController();
-    function* gen() { yield 1; yield 2; yield 3; }
+    function* gen() {
+      yield 1;
+      yield 2;
+      yield 3;
+    }
     const seen: number[] = [];
-    await expect((async () => {
-      for await (const n of chunked(gen(), { signal: c.signal })) { seen.push(n); if (n === 2) c.abort(); }
-    })()).rejects.toSatisfy(isAbort);
+    await expect(
+      (async () => {
+        for await (const n of chunked(gen(), { signal: c.signal })) {
+          seen.push(n);
+          if (n === 2) c.abort();
+        }
+      })(),
+    ).rejects.toSatisfy(isAbort);
     expect(seen).toEqual([1, 2]);
   });
 });

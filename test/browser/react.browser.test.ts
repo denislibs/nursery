@@ -1,7 +1,15 @@
 import { createElement, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { useScopedEffect, useAsync, useLatest, useEventStream, useWorker, ScopeProvider, useScope } from '../../src/react.js';
+import {
+  useScopedEffect,
+  useAsync,
+  useLatest,
+  useEventStream,
+  useWorker,
+  ScopeProvider,
+  useScope,
+} from '../../src/react.js';
 import { sleep, isAbort } from '../../src/signal.js';
 import { Scope, contextKey } from '../../src/scope.js';
 import type { api as EchoApi } from './fixtures/echo.worker.js';
@@ -30,7 +38,12 @@ describe('useScopedEffect', () => {
   test('closes the previous scope when deps change and on unmount', async () => {
     const signals: AbortSignal[] = [];
     function C({ id }: { id: number }) {
-      useScopedEffect(scope => { signals.push(scope.signal); }, [id]);
+      useScopedEffect(
+        scope => {
+          signals.push(scope.signal);
+        },
+        [id],
+      );
       return null;
     }
     await render(createElement(C, { id: 1 }));
@@ -39,7 +52,7 @@ describe('useScopedEffect', () => {
     expect(signals[0]!.aborted).toBe(true);
     expect(signals[1]!.aborted).toBe(false);
     await act(async () => root.unmount());
-    root = createRoot(container);          // afterEach unmounts again; keep it valid
+    root = createRoot(container); // afterEach unmounts again; keep it valid
     expect(signals[1]!.aborted).toBe(true);
   });
 });
@@ -48,12 +61,18 @@ describe('useAsync', () => {
   test('goes loading → success and ignores results of a cancelled run', async () => {
     const states: string[] = [];
     function C({ id }: { id: number }) {
-      const s = useAsync(async scope => { await sleep(id === 1 ? 50 : 5, scope.signal); return `user-${id}`; }, [id]);
+      const s = useAsync(
+        async scope => {
+          await sleep(id === 1 ? 50 : 5, scope.signal);
+          return `user-${id}`;
+        },
+        [id],
+      );
       states.push(s.status === 'success' ? s.data : s.status);
       return null;
     }
     await render(createElement(C, { id: 1 }));
-    await render(createElement(C, { id: 2 }));       // cancels the slow run for id 1
+    await render(createElement(C, { id: 2 })); // cancels the slow run for id 1
     await act(() => sleep(80));
     expect(states).not.toContain('user-1');
     expect(states.at(-1)).toBe('user-2');
@@ -61,7 +80,9 @@ describe('useAsync', () => {
   test('reports non-abort errors', async () => {
     let last: unknown;
     function C() {
-      const s = useAsync(async () => { throw new Error('boom'); }, []);
+      const s = useAsync(async () => {
+        throw new Error('boom');
+      }, []);
       last = s.status === 'error' ? (s.error as Error).message : s.status;
       return null;
     }
@@ -76,13 +97,26 @@ describe('useLatest', () => {
     const results: string[] = [];
     let api!: ReturnType<typeof useLatest<string, string>>;
     function C() {
-      api = useLatest(async (q: string, signal) => { await sleep(q === 'a' ? 50 : 5, signal); return q; });
+      api = useLatest(async (q: string, signal) => {
+        await sleep(q === 'a' ? 50 : 5, signal);
+        return q;
+      });
       return null;
     }
     await render(createElement(C));
     await act(async () => {
-      api.run('a').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
-      api.run('ab').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
+      api
+        .run('a')
+        .then(r => results.push(r))
+        .catch((e: unknown) => {
+          if (!isAbort(e)) throw e;
+        });
+      api
+        .run('ab')
+        .then(r => results.push(r))
+        .catch((e: unknown) => {
+          if (!isAbort(e)) throw e;
+        });
     });
     expect(api.pending).toBe(true);
     await act(() => sleep(80));
@@ -97,7 +131,9 @@ describe('useEventStream', () => {
     document.body.append(button);
     const seen: string[] = [];
     function C() {
-      useEventStream<MouseEvent>(button, 'click', e => { seen.push(e.type); });
+      useEventStream<MouseEvent>(button, 'click', e => {
+        seen.push(e.type);
+      });
       return null;
     }
     await render(createElement(C));
@@ -140,7 +176,9 @@ describe('ScopeProvider / useScope', () => {
 describe('useWorker', () => {
   test('creates the worker once, exposes the remote api, terminates on unmount', async () => {
     let remote!: ReturnType<typeof useWorker<typeof EchoApi>>;
-    const factory = vi.fn(() => new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' }));
+    const factory = vi.fn(
+      () => new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' }),
+    );
     function C({ tick }: { tick: number }) {
       remote = useWorker<typeof EchoApi>(factory);
       return createElement('span', null, String(tick));

@@ -4,7 +4,11 @@ import { isAbort } from '../src/signal.js';
 type FetchFn = typeof fetch;
 const sig = () => new AbortController().signal;
 const json = (body: unknown, init: ResponseInit = {}) =>
-  new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init });
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    ...init,
+  });
 
 function fakeFetch(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -20,7 +24,10 @@ describe('createHttp basics', () => {
   test('get() resolves baseUrl + path + query and parses JSON', async () => {
     const f = fakeFetch(() => json({ id: 1 }));
     const http = createHttp({ baseUrl: 'https://api.test/v1', fetch: f.fn });
-    const user = await http.get<{ id: number }>('/users/1', { signal: sig(), query: { expand: 'posts', page: 2 } });
+    const user = await http.get<{ id: number }>('/users/1', {
+      signal: sig(),
+      query: { expand: 'posts', page: 2 },
+    });
     expect(user).toEqual({ id: 1 });
     expect(f.calls[0]!.url).toBe('https://api.test/v1/users/1?expand=posts&page=2');
     expect(f.calls[0]!.init.method).toBe('GET');
@@ -48,7 +55,9 @@ describe('createHttp basics', () => {
   test('non-2xx responses reject with HttpError carrying status and parsed body', async () => {
     const f = fakeFetch(() => json({ error: 'nope' }, { status: 404 }));
     const http = createHttp({ fetch: f.fn });
-    const err = await http.get('https://x/missing', { signal: sig() }).catch((e: HttpError) => e) as HttpError;
+    const err = (await http
+      .get('https://x/missing', { signal: sig() })
+      .catch((e: HttpError) => e)) as HttpError;
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(404);
     expect(err.body).toEqual({ error: 'nope' });
@@ -75,10 +84,13 @@ describe('cancellation and timeout', () => {
 
   test('caller signal aborts the underlying fetch', async () => {
     let fetchSignal: AbortSignal | undefined;
-    const f = fakeFetch((_u, init) => new Promise((_r, rej) => {
-      fetchSignal = init.signal!;
-      init.signal!.addEventListener('abort', () => rej(init.signal!.reason));
-    }));
+    const f = fakeFetch(
+      (_u, init) =>
+        new Promise((_r, rej) => {
+          fetchSignal = init.signal!;
+          init.signal!.addEventListener('abort', () => rej(init.signal!.reason));
+        }),
+    );
     const http = createHttp({ fetch: f.fn });
     const c = new AbortController();
     const p = http.get('https://x/', { signal: c.signal });
@@ -88,7 +100,10 @@ describe('cancellation and timeout', () => {
   });
 
   test('timeout aborts the fetch with TimeoutError', async () => {
-    const f = fakeFetch((_u, init) => new Promise((_r, rej) => init.signal!.addEventListener('abort', () => rej(init.signal!.reason))));
+    const f = fakeFetch(
+      (_u, init) =>
+        new Promise((_r, rej) => init.signal!.addEventListener('abort', () => rej(init.signal!.reason))),
+    );
     const http = createHttp({ fetch: f.fn, timeout: 100 });
     const expectation = expect(http.get('https://x/', { signal: sig() })).rejects.toSatisfy(
       (e: unknown) => (e as DOMException).name === 'TimeoutError',
@@ -104,7 +119,9 @@ describe('retry', () => {
 
   test('retries 503 and honours Retry-After', async () => {
     let n = 0;
-    const f = fakeFetch(() => (++n === 1 ? json({}, { status: 503, headers: { 'retry-after': '2' } }) : json({ ok: 1 })));
+    const f = fakeFetch(() =>
+      ++n === 1 ? json({}, { status: 503, headers: { 'retry-after': '2' } }) : json({ ok: 1 }),
+    );
     const http = createHttp({ fetch: f.fn, retry: { retries: 2, delay: 10 } });
     const p = http.get<{ ok: number }>('https://x/', { signal: sig() });
     await vi.advanceTimersByTimeAsync(1999);
@@ -116,7 +133,10 @@ describe('retry', () => {
 
   test('retries network errors', async () => {
     let n = 0;
-    const f = fakeFetch(() => { if (++n === 1) throw new TypeError('Failed to fetch'); return json({ ok: 1 }); });
+    const f = fakeFetch(() => {
+      if (++n === 1) throw new TypeError('Failed to fetch');
+      return json({ ok: 1 });
+    });
     const http = createHttp({ fetch: f.fn, retry: { retries: 1, delay: 0 } });
     const p = http.get('https://x/', { signal: sig() });
     await vi.runAllTimersAsync();
@@ -179,10 +199,13 @@ describe('dedupe', () => {
 
   test('aborting one subscriber keeps the shared fetch alive; aborting all cancels it', async () => {
     let fetchSignal: AbortSignal | undefined;
-    const f = fakeFetch((_u, init) => new Promise((_r, rej) => {
-      fetchSignal = init.signal!;
-      init.signal!.addEventListener('abort', () => rej(init.signal!.reason));
-    }));
+    const f = fakeFetch(
+      (_u, init) =>
+        new Promise((_r, rej) => {
+          fetchSignal = init.signal!;
+          init.signal!.addEventListener('abort', () => rej(init.signal!.reason));
+        }),
+    );
     const http = createHttp({ fetch: f.fn });
     const c1 = new AbortController();
     const c2 = new AbortController();

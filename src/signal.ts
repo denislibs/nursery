@@ -4,9 +4,7 @@ export type MaybeSignal = AbortSignal | undefined;
 
 /** True for DOMException AbortError / TimeoutError (the two "cancelled" reasons). */
 export function isAbort(err: unknown): boolean {
-  return (
-    err instanceof DOMException && (err.name === 'AbortError' || err.name === 'TimeoutError')
-  );
+  return err instanceof DOMException && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
 export function abortError(message = 'Aborted'): DOMException {

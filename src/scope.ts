@@ -2,7 +2,10 @@ import { linkSignals, abortError, isAbort, timeoutError, type MaybeSignal } from
 
 /** Typed context key. Create with contextKey(); bind a value with key.with(value). */
 export class ContextKey<T> {
-  constructor(readonly name: string, readonly defaultValue?: T) {}
+  constructor(
+    readonly name: string,
+    readonly defaultValue?: T,
+  ) {}
   with(value: T): ContextBinding<T> {
     return { key: this, value };
   }
@@ -84,7 +87,10 @@ export class ScopeClosedError extends Error {
 
 /** Reported when close({ grace }) gave up waiting on tasks that ignore their signal. */
 export class ScopeStuckError extends Error {
-  constructor(readonly scopeName: string, readonly tasks: TaskInfo[]) {
+  constructor(
+    readonly scopeName: string,
+    readonly tasks: TaskInfo[],
+  ) {
     super(
       `Scope "${scopeName}" closed with ${tasks.length} stuck task(s): ${tasks
         .map(t => `${t.name} (${Math.round(t.elapsed)}ms)`)
@@ -131,8 +137,11 @@ interface AsyncVariable<T> {
   get(): T | undefined;
   run<R>(value: T, fn: () => R): R;
 }
-const AsyncContextVariable = (globalThis as { AsyncContext?: { Variable?: new <T>() => AsyncVariable<T> } }).AsyncContext?.Variable;
-const asyncVar: AsyncVariable<Scope> | undefined = AsyncContextVariable ? new AsyncContextVariable<Scope>() : undefined;
+const AsyncContextVariable = (globalThis as { AsyncContext?: { Variable?: new <T>() => AsyncVariable<T> } })
+  .AsyncContext?.Variable;
+const asyncVar: AsyncVariable<Scope> | undefined = AsyncContextVariable
+  ? new AsyncContextVariable<Scope>()
+  : undefined;
 let syncCurrent: Scope | undefined;
 
 type TaskStatus = 'ok' | 'error' | 'aborted';
@@ -196,7 +205,11 @@ export class Scope implements AsyncDisposable {
     this.#unlink = link.unlink;
     const own = opts.timeout === undefined ? undefined : performance.now() + opts.timeout;
     this.deadline =
-      own === undefined ? parent?.deadline : parent?.deadline === undefined ? own : Math.min(own, parent.deadline);
+      own === undefined
+        ? parent?.deadline
+        : parent?.deadline === undefined
+          ? own
+          : Math.min(own, parent.deadline);
     if (opts.timeout !== undefined) {
       this.#timer = setTimeout(
         () => this.abort(timeoutError(`Scope "${this.name}" timed out after ${opts.timeout}ms`)),
@@ -289,11 +302,19 @@ export class Scope implements AsyncDisposable {
   spawn<T>(task: ScopedTask<T>, opts: SpawnOptions = {}): Promise<T> {
     if (this.#closed) return Promise.reject(new ScopeClosedError());
     const inner = this.enter(() => (async () => task(this.signal, this))());
-    const rec: TaskRecord = { name: opts.name ?? `task#${++this.#taskCounter}`, startedAt: performance.now(), inner };
+    const rec: TaskRecord = {
+      name: opts.name ?? `task#${++this.#taskCounter}`,
+      startedAt: performance.now(),
+      inner,
+    };
     this.#tasks.add(rec);
     if (Scope.profiling) {
       const record = (status: TaskStatus) =>
-        measure(`scopekit:${this.name}/${rec.name}`, rec.startedAt, { scope: this.name, task: rec.name, status });
+        measure(`scopekit:${this.name}/${rec.name}`, rec.startedAt, {
+          scope: this.name,
+          task: rec.name,
+          status,
+        });
       inner.then(
         () => record('ok'),
         err => record(isAbort(err) ? 'aborted' : 'error'),
@@ -405,7 +426,8 @@ export class Scope implements AsyncDisposable {
     }
     if (this.#parent) this.#parent.#children.delete(this);
     this.#unlink();
-    if (Scope.profiling) measure(`scopekit:${this.name}`, this.#createdAt, { scope: this.name, stuck: this.#stuckCount });
+    if (Scope.profiling)
+      measure(`scopekit:${this.name}`, this.#createdAt, { scope: this.name, stuck: this.#stuckCount });
   }
 
   async #awaitSettled(grace: number | undefined): Promise<void> {

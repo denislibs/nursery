@@ -55,3 +55,49 @@ export function singleFlight<A, R>(
     return p;
   };
 }
+
+export interface LatestByFn<A, R> {
+  (arg: A, signal?: MaybeSignal): Promise<R>;
+  /** Abort the in-flight call for `key`, or every in-flight call when no key is given. */
+  cancel(key?: unknown): void;
+  /** True while a call for `key` (or, without a key, any call) is in flight. */
+  pending(key?: unknown): boolean;
+  /** Number of keys with an in-flight call. */
+  readonly size: number;
+}
+
+/**
+ * "Take latest" per key: a new call aborts the previous in-flight call with the same key only.
+ * Open cards each keep their own latest request; unrelated keys never cancel each other.
+ */
+export function latestBy<A, R>(
+  keyOf: (arg: A) => unknown,
+  fn: (arg: A, signal: AbortSignal) => Promise<R>,
+): LatestByFn<A, R> {
+  const perKey = new Map<unknown, LatestFn<A, R>>();
+  const wrapped = ((arg: A, signal?: MaybeSignal) => {
+    const key = keyOf(arg);
+    let runner = perKey.get(key);
+    if (!runner) {
+      runner = latest(fn);
+      perKey.set(key, runner);
+    }
+    const current = runner;
+    return current(arg, signal).finally(() => {
+      if (!current.pending && perKey.get(key) === current) perKey.delete(key);
+    });
+  }) as LatestByFn<A, R>;
+  wrapped.cancel = (key?: unknown) => {
+    if (arguments.length === 0 || key === undefined) {
+      for (const r of perKey.values()) r.cancel();
+      perKey.clear();
+      return;
+    }
+    perKey.get(key)?.cancel();
+    perKey.delete(key);
+  };
+  wrapped.pending = (key?: unknown) =>
+    key === undefined ? [...perKey.values()].some(r => r.pending) : (perKey.get(key)?.pending ?? false);
+  Object.defineProperty(wrapped, 'size', { get: () => perKey.size });
+  return wrapped;
+}

@@ -62,7 +62,12 @@ describe('task names and introspection', () => {
 describe('onUnhandled', () => {
   test('reports a failed task nobody awaited, with scope and task info', async () => {
     const scope = new Scope({ name: 's' });
-    scope.spawn(async () => { throw new Error('lost'); }, { name: 'bg' });
+    scope.spawn(
+      async () => {
+        throw new Error('lost');
+      },
+      { name: 'bg' },
+    );
     await tick();
     await tick();
     expect(reports).toHaveLength(1);
@@ -73,14 +78,22 @@ describe('onUnhandled', () => {
 
   test('does not report a failure the caller awaited', async () => {
     const scope = new Scope();
-    await expect(scope.spawn(async () => { throw new Error('seen'); })).rejects.toThrow('seen');
+    await expect(
+      scope.spawn(async () => {
+        throw new Error('seen');
+      }),
+    ).rejects.toThrow('seen');
     await tick();
     expect(reports).toEqual([]);
   });
 
   test('does not report a failure the caller handled with catch', async () => {
     const scope = new Scope();
-    scope.spawn(async () => { throw new Error('caught'); }).catch(() => {});
+    scope
+      .spawn(async () => {
+        throw new Error('caught');
+      })
+      .catch(() => {});
     await tick();
     await tick();
     expect(reports).toEqual([]);
@@ -96,11 +109,15 @@ describe('onUnhandled', () => {
   });
 
   test('does not report the error that Scope.run surfaces', async () => {
-    await expect(Scope.run(async scope => {
-      scope.spawn(async () => { throw new Error('surfaced'); });
-      await sleep(5);
-      return 'unreachable';
-    })).rejects.toThrow('surfaced');
+    await expect(
+      Scope.run(async scope => {
+        scope.spawn(async () => {
+          throw new Error('surfaced');
+        });
+        await sleep(5);
+        return 'unreachable';
+      }),
+    ).rejects.toThrow('surfaced');
     await tick();
     expect(reports).toEqual([]);
   });
@@ -108,7 +125,9 @@ describe('onUnhandled', () => {
   test('unsubscribe stops delivery', async () => {
     unsubscribe();
     const scope = new Scope();
-    scope.spawn(async () => { throw new Error('silent'); });
+    scope.spawn(async () => {
+      throw new Error('silent');
+    });
     await tick();
     await tick();
     expect(reports).toEqual([]);
@@ -117,10 +136,14 @@ describe('onUnhandled', () => {
 
 describe('Scope.run error precedence', () => {
   test('when the body dies of a sibling abort, run throws the original sibling error', async () => {
-    await expect(Scope.run(async scope => {
-      scope.spawn(async () => { throw new Error('root cause'); });
-      await scope.spawn(sig => sleep(1000, sig));   // will be aborted by the sibling failure
-    })).rejects.toThrow('root cause');
+    await expect(
+      Scope.run(async scope => {
+        scope.spawn(async () => {
+          throw new Error('root cause');
+        });
+        await scope.spawn(sig => sleep(1000, sig)); // will be aborted by the sibling failure
+      }),
+    ).rejects.toThrow('root cause');
   });
 });
 
@@ -129,7 +152,9 @@ describe('close with grace', () => {
     const scope = new Scope();
     scope.spawn(() => new Promise(() => {}), { name: 'stubborn' });
     const closed = scope.close().then(() => 'closed');
-    await expect(Promise.race([closed, sleep(30).then(() => 'still waiting')])).resolves.toBe('still waiting');
+    await expect(Promise.race([closed, sleep(30).then(() => 'still waiting')])).resolves.toBe(
+      'still waiting',
+    );
   });
 
   test('close({ grace }) resolves after the grace period and reports stuck tasks', async () => {
@@ -137,7 +162,9 @@ describe('close with grace', () => {
     scope.spawn(() => new Promise(() => {}), { name: 'stubborn' });
     scope.spawn(sig => sleep(1, sig), { name: 'polite' });
     let cleaned = false;
-    scope.defer(() => { cleaned = true; });
+    scope.defer(() => {
+      cleaned = true;
+    });
 
     await scope.close({ grace: 20 });
 

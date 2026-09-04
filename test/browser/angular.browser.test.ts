@@ -2,7 +2,14 @@ import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { signal } from '@angular/core';
-import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from '../../src/angular.js';
+import {
+  injectScope,
+  scopedEffect,
+  injectAsync,
+  injectLatest,
+  injectEventStream,
+  injectWorker,
+} from '../../src/angular.js';
 import { sleep, isAbort } from '../../src/signal.js';
 import type { api as EchoApi } from './fixtures/echo.worker.js';
 
@@ -22,7 +29,12 @@ describe('angular adapter', () => {
   test('scopedEffect re-runs with a fresh scope when a signal changes', async () => {
     const id = signal(1);
     const signals: AbortSignal[] = [];
-    TestBed.runInInjectionContext(() => scopedEffect(scope => { void id(); signals.push(scope.signal); }));
+    TestBed.runInInjectionContext(() =>
+      scopedEffect(scope => {
+        void id();
+        signals.push(scope.signal);
+      }),
+    );
     TestBed.tick();
     id.set(2);
     TestBed.tick();
@@ -34,7 +46,11 @@ describe('angular adapter', () => {
   test('injectAsync tracks state and drops cancelled results', async () => {
     const id = signal(1);
     const state = TestBed.runInInjectionContext(() =>
-      injectAsync(async scope => { const cur = id(); await sleep(cur === 1 ? 50 : 5, scope.signal); return `user-${cur}`; }),
+      injectAsync(async scope => {
+        const cur = id();
+        await sleep(cur === 1 ? 50 : 5, scope.signal);
+        return `user-${cur}`;
+      }),
     );
     TestBed.tick();
     expect(state.loading()).toBe(true);
@@ -46,10 +62,25 @@ describe('angular adapter', () => {
   });
 
   test('injectLatest cancels older calls and exposes pending', async () => {
-    const api = TestBed.runInInjectionContext(() => injectLatest(async (q: string, sig) => { await sleep(q === 'a' ? 50 : 5, sig); return q; }));
+    const api = TestBed.runInInjectionContext(() =>
+      injectLatest(async (q: string, sig) => {
+        await sleep(q === 'a' ? 50 : 5, sig);
+        return q;
+      }),
+    );
     const results: string[] = [];
-    api.run('a').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
-    api.run('ab').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
+    api
+      .run('a')
+      .then(r => results.push(r))
+      .catch((e: unknown) => {
+        if (!isAbort(e)) throw e;
+      });
+    api
+      .run('ab')
+      .then(r => results.push(r))
+      .catch((e: unknown) => {
+        if (!isAbort(e)) throw e;
+      });
     expect(api.pending()).toBe(true);
     await sleep(80);
     expect(results).toEqual(['ab']);
@@ -61,8 +92,12 @@ describe('angular adapter', () => {
     document.body.append(button);
     const seen: string[] = [];
     const remote = TestBed.runInInjectionContext(() => {
-      injectEventStream<MouseEvent>(button, 'click', e => { seen.push(e.type); });
-      return injectWorker<typeof EchoApi>(() => new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' }));
+      injectEventStream<MouseEvent>(button, 'click', e => {
+        seen.push(e.type);
+      });
+      return injectWorker<typeof EchoApi>(
+        () => new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' }),
+      );
     });
     button.click();
     await sleep(5);

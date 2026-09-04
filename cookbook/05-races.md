@@ -123,3 +123,16 @@ saveButton.onclick = () => saves.add(sig => api.save(form.value, sig));
 | Действия должны выполняться строго по очереди | `Queue({ concurrency: 1 })` |
 | Первый из нескольких источников | `race` |
 | Нужен кеш с TTL | TanStack Query / SWR поверх этих примитивов |
+
+## latestBy: последний по ключу
+
+```ts
+import { latestBy } from 'scopekit/latest';
+
+const loadDetail = latestBy((id: string) => id, (id, signal) => api.detail(id, signal));
+
+loadDetail('a'); loadDetail('b'); loadDetail('a');   // отменён только первый 'a'
+loadDetail.pending('a'); loadDetail.cancel('b'); loadDetail.cancel();
+```
+
+Ключи, у которых нет вызова в полёте, из внутренней карты удаляются, `size` показывает живые.

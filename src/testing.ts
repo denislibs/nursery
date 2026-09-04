@@ -75,7 +75,13 @@ export function fakeFetch(handler: ((url: string, init: RequestInit) => unknown)
   const fetchFn: typeof fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = (init.method ?? 'GET').toUpperCase();
-    const call: FakeCall = { url, method, init, headers: new Headers(init.headers), body: decodeBody(init.body) };
+    const call: FakeCall = {
+      url,
+      method,
+      init,
+      headers: new Headers(init.headers),
+      body: decodeBody(init.body),
+    };
     calls.push(call);
     if (typeof handler === 'function') return toResponse(await handler(url, init));
     const parsed = new URL(url);
@@ -132,7 +138,8 @@ export function settle<T>(p: Promise<T>): Promise<Settled<T>> {
 /** Resolves with the abort reason; throws if the promise fulfilled or failed with a non-abort error. */
 export async function expectAborted(p: Promise<unknown>): Promise<unknown> {
   const s = await settle(p);
-  if (s.status === 'fulfilled') throw new Error(`Expected an abort but the promise fulfilled with ${String(s.value)}`);
+  if (s.status === 'fulfilled')
+    throw new Error(`Expected an abort but the promise fulfilled with ${String(s.value)}`);
   if (!isAbort(s.reason)) throw s.reason;
   return s.reason;
 }
@@ -181,7 +188,14 @@ export interface PortPair {
 /** Two connected MessagePorts, for exercising expose()/wrap() without a Worker. */
 export function portPair(): PortPair {
   const ch = new MessageChannel();
-  return { a: ch.port1, b: ch.port2, close: () => { ch.port1.close(); ch.port2.close(); } };
+  return {
+    a: ch.port1,
+    b: ch.port2,
+    close: () => {
+      ch.port1.close();
+      ch.port2.close();
+    },
+  };
 }
 
 export interface MockWorker extends PoolEndpoint {

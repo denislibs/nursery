@@ -243,3 +243,12 @@ const r = jobs.tryReceive();                 // { ok: true, value } | { ok: fals
 
 Это единственный безопасный способ «отбросить при переполнении»: проверка `size` перед `send`
 это гонка.
+
+## share с resubscribe
+
+По умолчанию после завершения источника новый потребитель сразу получает `done`. С фабрикой и
+`resubscribe` источник запускается заново для следующего потребителя:
+
+```ts
+const prices = share(() => messages(openSocket(), signal), { resubscribe: true });
+```

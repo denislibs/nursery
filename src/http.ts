@@ -1,12 +1,25 @@
 import { retry, type RetryOptions } from './combine.js';
-import { abortError, anySignal, timeoutError, timeoutSignal } from './signal.js';
+import { abortError, anySignal, isAbort, sleep, timeoutError, timeoutSignal } from './signal.js';
 import { fromReadableStream } from './iter.js';
 import type { Scope } from './scope.js';
 
-export type QueryValue = string | number | boolean | null | undefined | QueryValue[] | { [key: string]: QueryValue };
+export type QueryValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | QueryValue[]
+  | { [key: string]: QueryValue };
 export type Query = Record<string, QueryValue>;
 
-export type RequestHook = (url: string, init: RequestInit) => void | Partial<{ url: string; init: RequestInit }> | Promise<void | Partial<{ url: string; init: RequestInit }>>;
+export type RequestHook = (
+  url: string,
+  init: RequestInit,
+) =>
+  | void
+  | Partial<{ url: string; init: RequestInit }>
+  | Promise<void | Partial<{ url: string; init: RequestInit }>>;
 
 /** A function or a zod-like object that validates/transforms the parsed body. */
 export type Parser<T> = ((raw: unknown) => T) | { parse: (raw: unknown) => T };
@@ -41,9 +54,7 @@ export interface HttpOptions {
 }
 
 /** Every request needs an owner: an explicit signal, a Scope, or both. */
-export type RequestOwner =
-  | { signal: AbortSignal; scope?: Scope }
-  | { scope: Scope; signal?: AbortSignal };
+export type RequestOwner = { signal: AbortSignal; scope?: Scope } | { scope: Scope; signal?: AbortSignal };
 
 export interface RequestCommon<T = unknown> extends Omit<RequestInit, 'signal' | 'body' | 'method'> {
   method?: string;
@@ -70,9 +81,25 @@ export type RequestOptions<T = unknown> = RequestOwner & RequestCommon<T>;
 export type BodyOptions<T = unknown> = RequestOwner & Omit<RequestCommon<T>, 'method'>;
 
 export interface StreamOptions extends Omit<RequestCommon, 'parse' | 'dedupe'> {}
+export interface SseReconnect {
+  /** Initial wait before reconnecting; a server `retry:` field overrides it. Default 1000. */
+  delay?: number;
+  /** Upper bound for the wait. Default 30000. */
+  maxDelay?: number;
+  /** Backoff multiplier applied after each failed reconnect attempt. Default 2. */
+  factor?: number;
+  /** Decide whether an error is worth reconnecting on. Default: network errors, timeouts, 408/425/429/5xx. */
+  retryOn?: (err: unknown) => boolean;
+  /** Observes each wait: the error that caused it (undefined for a clean stream end), the attempt, the delay. */
+  onRetry?: (err: unknown, attempt: number, delayMs: number) => void;
+}
+
 export interface SseOptions extends StreamOptions {
-  /** Reconnect when the stream ends without abort, sending Last-Event-ID. Off by default. */
-  reconnect?: { delay?: number; maxDelay?: number };
+  /**
+   * Reconnect when the stream ends or fails (network error, timeout, retryable status),
+   * sending Last-Event-ID and backing off between failed attempts. Off by default.
+   */
+  reconnect?: SseReconnect;
 }
 
 export interface SseEvent {
@@ -141,7 +168,8 @@ export function createHttp(options: HttpOptions = {}): Http {
     onResponse,
     querySerializer = defaultQuerySerializer,
   } = options;
-  const requestHooks: RequestHook[] = onRequest === undefined ? [] : Array.isArray(onRequest) ? onRequest : [onRequest];
+  const requestHooks: RequestHook[] =
+    onRequest === undefined ? [] : Array.isArray(onRequest) ? onRequest : [onRequest];
   const flights = new Map<string, Flight>();
 
   function buildUrl(url: string, query: Query | undefined, base: string | undefined): string {
@@ -157,7 +185,12 @@ export function createHttp(options: HttpOptions = {}): Http {
     return u.href;
   }
 
-  async function performOnce(url: string, init: RequestInit, signal: AbortSignal, attempt: number): Promise<Response> {
+  async function performOnce(
+    url: string,
+    init: RequestInit,
+    signal: AbortSignal,
+    attempt: number,
+  ): Promise<Response> {
     let finalUrl = url;
     let finalInit: RequestInit = { ...init, signal };
     for (const hook of requestHooks) {
@@ -193,7 +226,8 @@ export function createHttp(options: HttpOptions = {}): Http {
               return after ?? custom;
             }
             if (err instanceof TypeError) return policy.retryOn?.(err, n) ?? true; // network failure
-            if (err instanceof DOMException && err.name === 'TimeoutError') return policy.retryOn?.(err, n) ?? true;
+            if (err instanceof DOMException && err.name === 'TimeoutError')
+              return policy.retryOn?.(err, n) ?? true;
             return false;
           },
         })
@@ -204,7 +238,11 @@ export function createHttp(options: HttpOptions = {}): Http {
     });
   }
 
-  function subscribe(key: string, signal: AbortSignal, start: (sig: AbortSignal) => Promise<Response>): Promise<Response> {
+  function subscribe(
+    key: string,
+    signal: AbortSignal,
+    start: (sig: AbortSignal) => Promise<Response>,
+  ): Promise<Response> {
     let flight = flights.get(key);
     if (!flight) {
       const ctrl = new AbortController();
@@ -239,7 +277,9 @@ export function createHttp(options: HttpOptions = {}): Http {
   }
 
   /** Resolves the owner (signal/scope/deadline) into one signal plus the effective attempt timeout. */
-  function owner(opts: RequestOptions | (RequestOwner & StreamOptions)): { signal: AbortSignal; attemptTimeout: number | undefined } | Error {
+  function owner(
+    opts: RequestOptions | (RequestOwner & StreamOptions),
+  ): { signal: AbortSignal; attemptTimeout: number | undefined } | Error {
     const { signal: explicit, scope } = opts as { signal?: AbortSignal; scope?: Scope };
     if (!(explicit instanceof AbortSignal) && !scope) {
       return new TypeError('http: every request needs a `signal` or a `scope`');
@@ -259,9 +299,36 @@ export function createHttp(options: HttpOptions = {}): Http {
   function request(url: string, opts: RequestOptions): Promise<Response> {
     const own = owner(opts);
     if (own instanceof Error) return Promise.reject(own);
-    const { method = 'GET', body, query, retry: reqRetry, dedupe, headers: reqHeaders, baseUrl: reqBase, onDownloadProgress, onUploadProgress } = opts;
-    const { signal: _s, scope: _sc, timeout: _t, deadline: _d, parse: _p, ...restInit } = opts as RequestOptions & { scope?: Scope };
-    const rest = omit(restInit, ['method', 'body', 'query', 'retry', 'dedupe', 'headers', 'baseUrl', 'onDownloadProgress', 'onUploadProgress']);
+    const {
+      method = 'GET',
+      body,
+      query,
+      retry: reqRetry,
+      dedupe,
+      headers: reqHeaders,
+      baseUrl: reqBase,
+      onDownloadProgress,
+      onUploadProgress,
+    } = opts;
+    const {
+      signal: _s,
+      scope: _sc,
+      timeout: _t,
+      deadline: _d,
+      parse: _p,
+      ...restInit
+    } = opts as RequestOptions & { scope?: Scope };
+    const rest = omit(restInit, [
+      'method',
+      'body',
+      'query',
+      'retry',
+      'dedupe',
+      'headers',
+      'baseUrl',
+      'onDownloadProgress',
+      'onUploadProgress',
+    ]);
     const m = method.toUpperCase();
     const headers = new Headers(defaultHeaders);
     new Headers(reqHeaders).forEach((v, k) => headers.set(k, v));
@@ -292,7 +359,8 @@ export function createHttp(options: HttpOptions = {}): Http {
     try {
       return typeof opts.parse === 'function' ? opts.parse(body) : opts.parse.parse(body);
     } catch (err) {
-      if (err instanceof Error) Object.defineProperty(err, 'response', { value: res, configurable: true, writable: true });
+      if (err instanceof Error)
+        Object.defineProperty(err, 'response', { value: res, configurable: true, writable: true });
       throw err;
     }
   }
@@ -304,7 +372,10 @@ export function createHttp(options: HttpOptions = {}): Http {
     return res;
   }
 
-  async function* stream<T>(url: string, opts: RequestOwner & StreamOptions): AsyncGenerator<T, void, undefined> {
+  async function* stream<T>(
+    url: string,
+    opts: RequestOwner & StreamOptions,
+  ): AsyncGenerator<T, void, undefined> {
     const res = await openStream(url, opts);
     for await (const line of lines(res.body!)) {
       if (line.trim() === '') continue;
@@ -312,49 +383,81 @@ export function createHttp(options: HttpOptions = {}): Http {
     }
   }
 
-  async function* sse(url: string, opts: RequestOwner & SseOptions): AsyncGenerator<SseEvent, void, undefined> {
+  async function* sse(
+    url: string,
+    opts: RequestOwner & SseOptions,
+  ): AsyncGenerator<SseEvent, void, undefined> {
     const { reconnect, ...rest } = opts;
-    let lastEventId: string | undefined;
-    let retryMs = reconnect?.delay ?? 1000;
+    const baseDelay = reconnect?.delay ?? 1000;
+    const maxDelay = reconnect?.maxDelay ?? 30_000;
+    const factor = reconnect?.factor ?? 2;
+    const shouldReconnect = reconnect?.retryOn ?? defaultSseRetryOn;
     const signal = (opts as { signal?: AbortSignal }).signal ?? (opts as { scope?: Scope }).scope?.signal;
+    let lastEventId: string | undefined;
+    let serverRetry: number | undefined;
+    let wait = baseDelay;
+    let attempt = 0;
+
+    const backoff = async (err: unknown) => {
+      const d = Math.min(wait, maxDelay);
+      reconnect!.onRetry?.(err, attempt, d);
+      await sleep(d, signal);
+      wait = Math.min(wait * factor, maxDelay);
+      attempt++;
+    };
+
     for (;;) {
       const headers = new Headers(rest.headers);
       headers.set('accept', 'text/event-stream');
       if (lastEventId !== undefined) headers.set('last-event-id', lastEventId);
-      const res = await openStream(url, { ...rest, headers, cache: 'no-store' });
+      let res: Response;
+      try {
+        res = await openStream(url, { ...rest, headers, cache: 'no-store' });
+      } catch (err) {
+        if (!reconnect || isAbort(err) || !shouldReconnect(err)) throw err;
+        await backoff(err);
+        continue;
+      }
+      // connected: reset the backoff
+      wait = serverRetry ?? baseDelay;
+      attempt = 0;
+      let failure: unknown;
       let id: string | undefined;
       let event = 'message';
       let data: string[] = [];
       let retryField: number | undefined;
-      for await (const line of lines(res.body!)) {
-        if (line === '') {
-          if (data.length > 0) {
-            if (id !== undefined) lastEventId = id;
-            yield { id: lastEventId, event, data: data.join('\n'), retry: retryField };
+      try {
+        for await (const line of lines(res.body!)) {
+          if (line === '') {
+            if (data.length > 0) {
+              if (id !== undefined) lastEventId = id;
+              yield { id: lastEventId, event, data: data.join('\n'), retry: retryField };
+            }
+            event = 'message';
+            data = [];
+            retryField = undefined;
+            continue;
           }
-          event = 'message';
-          data = [];
-          retryField = undefined;
-          continue;
+          if (line.startsWith(':')) continue;
+          const colon = line.indexOf(':');
+          const field = colon === -1 ? line : line.slice(0, colon);
+          let value = colon === -1 ? '' : line.slice(colon + 1);
+          if (value.startsWith(' ')) value = value.slice(1);
+          if (field === 'data') data.push(value);
+          else if (field === 'event') event = value;
+          else if (field === 'id') id = value.includes('\0') ? id : value;
+          else if (field === 'retry' && /^\d+$/.test(value)) {
+            retryField = Number(value);
+            serverRetry = retryField;
+            wait = retryField;
+          }
         }
-        if (line.startsWith(':')) continue;
-        const colon = line.indexOf(':');
-        const field = colon === -1 ? line : line.slice(0, colon);
-        let value = colon === -1 ? '' : line.slice(colon + 1);
-        if (value.startsWith(' ')) value = value.slice(1);
-        if (field === 'data') data.push(value);
-        else if (field === 'event') event = value;
-        else if (field === 'id') id = value.includes('\0') ? id : value;
-        else if (field === 'retry' && /^\d+$/.test(value)) {
-          retryField = Number(value);
-          retryMs = retryField;
-        }
+      } catch (err) {
+        if (isAbort(err) || !reconnect || !shouldReconnect(err)) throw err;
+        failure = err;
       }
       if (!reconnect || signal?.aborted) return;
-      await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(resolve, Math.min(retryMs, reconnect.maxDelay ?? Infinity));
-        signal?.addEventListener('abort', () => { clearTimeout(t); reject(signal.reason ?? abortError()); }, { once: true });
-      });
+      await backoff(failure);
     }
   }
 
@@ -369,6 +472,12 @@ export function createHttp(options: HttpOptions = {}): Http {
     stream,
     sse,
   };
+}
+
+function defaultSseRetryOn(err: unknown): boolean {
+  if (err instanceof HttpError) return DEFAULT_RETRY_STATUSES.includes(err.status);
+  if (err instanceof TypeError) return true; // network failure
+  return err instanceof DOMException && err.name === 'TimeoutError';
 }
 
 function defaultQuerySerializer(query: Query): URLSearchParams {
@@ -388,7 +497,10 @@ function defaultQuerySerializer(query: Query): URLSearchParams {
 }
 
 /** Wraps a body into a ReadableStream that reports bytes sent. Returns undefined for unsupported bodies. */
-function uploadStream(body: BodyInit, onProgress: (sent: number, total: number) => void): ReadableStream<Uint8Array> | undefined {
+function uploadStream(
+  body: BodyInit,
+  onProgress: (sent: number, total: number) => void,
+): ReadableStream<Uint8Array> | undefined {
   let bytes: Uint8Array | Blob;
   if (typeof body === 'string') bytes = new TextEncoder().encode(body);
   else if (body instanceof Blob) bytes = body;
@@ -409,7 +521,10 @@ function uploadStream(body: BodyInit, onProgress: (sent: number, total: number) 
         return;
       }
       const end = Math.min(offset + CHUNK, total);
-      const piece = bytes instanceof Blob ? new Uint8Array(await bytes.slice(offset, end).arrayBuffer()) : bytes.subarray(offset, end);
+      const piece =
+        bytes instanceof Blob
+          ? new Uint8Array(await bytes.slice(offset, end).arrayBuffer())
+          : bytes.subarray(offset, end);
       offset = end;
       sent += piece.byteLength;
       onProgress(sent, total);
@@ -418,7 +533,10 @@ function uploadStream(body: BodyInit, onProgress: (sent: number, total: number) 
   });
 }
 
-function withDownloadProgress(res: Response, onProgress: (loaded: number, total: number | undefined) => void): Response {
+function withDownloadProgress(
+  res: Response,
+  onProgress: (loaded: number, total: number | undefined) => void,
+): Response {
   if (!res.body) return res;
   const header = res.headers.get('content-length');
   const total = header === null ? undefined : Number(header);

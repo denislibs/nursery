@@ -36,7 +36,8 @@ export function useScope(opts?: ScopeOptions): Scope {
   const parent = useContext(ScopeContext);
   const optsRef = useRef(opts);
   optsRef.current = opts;
-  const create = () => (parent ? parent.child(optsRef.current, { detached: true }) : new Scope(optsRef.current));
+  const create = () =>
+    parent ? parent.child(optsRef.current, { detached: true }) : new Scope(optsRef.current);
   const ref = useRef<Scope | null>(null);
   ref.current ??= create();
   const [, rerender] = useReducer((n: number) => n + 1, 0);
@@ -83,7 +84,11 @@ export type AsyncState<T> =
   | { status: 'error'; error: unknown };
 
 /** Loads data in a scoped effect. Results of a cancelled run never reach state. */
-export function useAsync<T>(fn: (scope: Scope) => Promise<T>, deps: DependencyList, opts?: ScopeOptions): AsyncState<T> {
+export function useAsync<T>(
+  fn: (scope: Scope) => Promise<T>,
+  deps: DependencyList,
+  opts?: ScopeOptions,
+): AsyncState<T> {
   const [state, setState] = useState<AsyncState<T>>({ status: 'loading' });
   useScopedEffect(
     async scope => {

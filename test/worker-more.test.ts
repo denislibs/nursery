@@ -21,7 +21,7 @@ describe('transfer', () => {
     const remote = setup({ size: async (buf: ArrayBuffer) => buf.byteLength });
     const buf = new ArrayBuffer(16);
     await expect(remote.size(transfer(buf, [buf]))).resolves.toBe(16);
-    expect(buf.byteLength).toBe(0);            // detached: it was moved, not copied
+    expect(buf.byteLength).toBe(0); // detached: it was moved, not copied
   });
   test('transfer works for buffers nested in an options object', async () => {
     const remote = setup({ size: async (o: { data: Uint8Array }) => o.data.byteLength });
@@ -30,7 +30,12 @@ describe('transfer', () => {
     expect(data.buffer.byteLength).toBe(0);
   });
   test('results can be transferred back from the worker', async () => {
-    const remote = setup({ make: async (n: number) => { const b = new ArrayBuffer(n); return transfer(b, [b]); } });
+    const remote = setup({
+      make: async (n: number) => {
+        const b = new ArrayBuffer(n);
+        return transfer(b, [b]);
+      },
+    });
     const out = await remote.make(32);
     expect(out.byteLength).toBe(32);
   });
@@ -39,29 +44,57 @@ describe('transfer', () => {
 describe('callback', () => {
   test('a callback argument is invoked in the caller with the worker-provided arguments', async () => {
     const remote = setup({
-      work: async (n: number, onProgress: (p: number) => void) => { for (let i = 1; i <= n; i++) onProgress(i / n); return 'done'; },
+      work: async (n: number, onProgress: (p: number) => void) => {
+        for (let i = 1; i <= n; i++) onProgress(i / n);
+        return 'done';
+      },
     });
     const seen: number[] = [];
-    await expect(remote.work(4, callback((p: number) => { seen.push(p); }))).resolves.toBe('done');
+    await expect(
+      remote.work(
+        4,
+        callback((p: number) => {
+          seen.push(p);
+        }),
+      ),
+    ).resolves.toBe('done');
     expect(seen).toEqual([0.25, 0.5, 0.75, 1]);
   });
   test('callback return values flow back to the worker as a promise', async () => {
     const remote = setup({
-      ask: async (q: string, confirm: (q: string) => Promise<boolean>) => (await confirm(q)) ? 'yes' : 'no',
+      ask: async (q: string, confirm: (q: string) => Promise<boolean>) => ((await confirm(q)) ? 'yes' : 'no'),
     });
-    await expect(remote.ask('sure?', callback(async (q: string) => q === 'sure?'))).resolves.toBe('yes');
+    await expect(
+      remote.ask(
+        'sure?',
+        callback(async (q: string) => q === 'sure?'),
+      ),
+    ).resolves.toBe('yes');
   });
   test('callback inside an options object works too', async () => {
     const remote = setup({
-      run: async (o: { onLog: (m: string) => void }) => { o.onLog('a'); o.onLog('b'); return 2; },
+      run: async (o: { onLog: (m: string) => void }) => {
+        o.onLog('a');
+        o.onLog('b');
+        return 2;
+      },
     });
     const logs: string[] = [];
-    await expect(remote.run({ onLog: callback((m: string) => { logs.push(m); }) })).resolves.toBe(2);
+    await expect(
+      remote.run({
+        onLog: callback((m: string) => {
+          logs.push(m);
+        }),
+      }),
+    ).resolves.toBe(2);
     expect(logs).toEqual(['a', 'b']);
   });
   test('callbacks are released after the call settles', async () => {
     const remote = setup({
-      keep: async (cb: (x: number) => void) => { cb(1); return 'ok'; },
+      keep: async (cb: (x: number) => void) => {
+        cb(1);
+        return 'ok';
+      },
     });
     const spy = vi.fn();
     await remote.keep(callback(spy));
@@ -74,12 +107,21 @@ describe('callback', () => {
   test('callbacks and signals can be combined in one call', async () => {
     const remote = setup({
       long: async (o: { signal: AbortSignal; onTick: (i: number) => void }) => {
-        for (let i = 0; ; i++) { o.onTick(i); await sleep(5, o.signal); }
+        for (let i = 0; ; i++) {
+          o.onTick(i);
+          await sleep(5, o.signal);
+        }
       },
     });
     const c = new AbortController();
     const ticks: number[] = [];
-    const p = remote.long({ signal: c.signal, onTick: callback((i: number) => { ticks.push(i); if (i >= 2) c.abort(); }) });
+    const p = remote.long({
+      signal: c.signal,
+      onTick: callback((i: number) => {
+        ticks.push(i);
+        if (i >= 2) c.abort();
+      }),
+    });
     await expect(p).rejects.toSatisfy(isAbort);
     expect(ticks.length).toBeGreaterThanOrEqual(3);
   });

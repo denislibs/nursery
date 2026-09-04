@@ -6,7 +6,10 @@ import type { useLatest, useWorker } from '../../src/svelte.js';
 import type { api as EchoApi } from './fixtures/echo.worker.js';
 
 let target: HTMLDivElement;
-beforeEach(() => { target = document.createElement('div'); document.body.append(target); });
+beforeEach(() => {
+  target = document.createElement('div');
+  document.body.append(target);
+});
 afterEach(() => target.remove());
 
 describe('svelte adapter', () => {
@@ -18,7 +21,20 @@ describe('svelte adapter', () => {
     const props = $state({ id: 1 });
     const instance = mount(Scoped, {
       target,
-      props: { get id() { return props.id; }, onScope: (s: Scope) => scopes.push(s), onClick: (t: string) => clicks.push(t), onRemote: (r: ReturnType<typeof useWorker<typeof EchoApi>>, l: ReturnType<typeof useLatest<string, string>>) => { remote = r; search = l; } },
+      props: {
+        get id() {
+          return props.id;
+        },
+        onScope: (s: Scope) => scopes.push(s),
+        onClick: (t: string) => clicks.push(t),
+        onRemote: (
+          r: ReturnType<typeof useWorker<typeof EchoApi>>,
+          l: ReturnType<typeof useLatest<string, string>>,
+        ) => {
+          remote = r;
+          search = l;
+        },
+      },
     });
     flushSync();
     expect(scopes.map(s => s.name)).toEqual(['component', expect.any(String)]);
@@ -39,8 +55,18 @@ describe('svelte adapter', () => {
 
     // latest
     const results: string[] = [];
-    search.run('a').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
-    search.run('ab').then(r => results.push(r)).catch((e: unknown) => { if (!isAbort(e)) throw e; });
+    search
+      .run('a')
+      .then(r => results.push(r))
+      .catch((e: unknown) => {
+        if (!isAbort(e)) throw e;
+      });
+    search
+      .run('ab')
+      .then(r => results.push(r))
+      .catch((e: unknown) => {
+        if (!isAbort(e)) throw e;
+      });
     await sleep(80);
     expect(results).toEqual(['ab']);
 

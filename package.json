@@ -2,42 +2,23 @@
   "name": "scopekit",
   "version": "0.1.0",
   "description": "Structured concurrency, cancellation and concurrency-limit utilities for the browser",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "scripts": {
-    "lint": "oxlint src test",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:node": "vitest run --project node",
-    "test:browser": "vitest run --project browser",
-    "test:watch": "vitest --project node",
-    "build": "tsc -p tsconfig.build.json",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  "homepage": "https://github.com/denislibs/scopekit#readme",
+  "bugs": {
+    "url": "https://github.com/denislibs/scopekit/issues"
   },
   "license": "MIT",
-  "devDependencies": {
-    "@angular/common": "^21.2.22",
-    "@angular/compiler": "^21.2.22",
-    "@angular/core": "^21.2.22",
-    "@angular/platform-browser": "^21.2.22",
-    "@sveltejs/vite-plugin-svelte": "^6.2.4",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitest/browser-playwright": "^5.0.0",
-    "oxlint": "^1.81.0",
-    "oxlint-tsgolint": "^7.0.2001",
-    "playwright": "^1.62.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "rxjs": "^7.8.2",
-    "solid-js": "^1.9.15",
-    "svelte": "^5.57.0",
-    "typescript": "7.0.2",
-    "vitest": "^5.0.0",
-    "vue": "^3.5.42"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denislibs/scopekit.git"
   },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -109,28 +90,47 @@
       "import": "./dist/angular.js"
     }
   },
-  "files": [
-    "dist",
-    "src"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/denislibs/scopekit.git"
+  "scripts": {
+    "lint": "oxlint src test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:node": "vitest run --project node",
+    "test:browser": "vitest run --project browser",
+    "test:watch": "vitest --project node",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "format": "oxfmt src test vitest.config.ts tsconfig.json tsconfig.build.json package.json svelte.config.js",
+    "format:check": "oxfmt --check src test vitest.config.ts tsconfig.json tsconfig.build.json package.json svelte.config.js"
   },
-  "homepage": "https://github.com/denislibs/scopekit#readme",
-  "bugs": {
-    "url": "https://github.com/denislibs/scopekit/issues"
-  },
-  "sideEffects": false,
-  "engines": {
-    "node": ">=22"
+  "devDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/compiler": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitest/browser-playwright": "^5.0.0",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "playwright": "^1.62.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "rxjs": "^7.8.2",
+    "solid-js": "^1.9.15",
+    "svelte": "^5.57.0",
+    "typescript": "7.0.2",
+    "vitest": "^5.0.0",
+    "vue": "^3.5.42"
   },
   "peerDependencies": {
+    "@angular/core": ">=17",
     "react": ">=18",
-    "vue": ">=3.3",
     "solid-js": ">=1.7",
     "svelte": ">=5",
-    "@angular/core": ">=17"
+    "vue": ">=3.3"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -148,5 +148,8 @@
     "@angular/core": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

@@ -1,5 +1,14 @@
 /** Vue 3 composables. Import from 'scopekit/vue'; requires vue >= 3.3. */
-import { onScopeDispose, ref, shallowRef, watch, watchEffect, type Ref, type ShallowRef, type WatchSource } from 'vue';
+import {
+  onScopeDispose,
+  ref,
+  shallowRef,
+  watch,
+  watchEffect,
+  type Ref,
+  type ShallowRef,
+  type WatchSource,
+} from 'vue';
 import { Scope, type ScopeOptions } from './scope.js';
 import { latest } from './latest.js';
 import { isAbort } from './signal.js';

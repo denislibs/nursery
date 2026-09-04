@@ -15,7 +15,9 @@ export const api = {
     }
   },
   lastAbort: async () => lastAbort,
-  boom: async () => { throw new TypeError('bad input'); },
+  boom: async () => {
+    throw new TypeError('bad input');
+  },
 };
 
 expose(api);

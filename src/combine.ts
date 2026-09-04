@@ -1,4 +1,12 @@
-import { anySignal, linkSignals, isAbort, sleep, timeoutError, throwIfAborted, type MaybeSignal } from './signal.js';
+import {
+  anySignal,
+  linkSignals,
+  isAbort,
+  sleep,
+  timeoutError,
+  throwIfAborted,
+  type MaybeSignal,
+} from './signal.js';
 
 /** A cancellable unit of work: receives a signal, returns a promise. */
 export type Task<T> = (signal: AbortSignal) => Promise<T>;
@@ -37,29 +45,47 @@ export interface RetryOptions {
   retryOn?: (err: unknown, attempt: number) => boolean | number;
   /** Per-attempt timeout in ms. A timed-out attempt counts as a retryable failure. */
   attemptTimeout?: number;
+  /** Observes each retry decision: the error, the attempt that failed (0-based) and the wait before the next one. */
+  onRetry?: (err: unknown, attempt: number, delayMs: number) => void;
   signal?: MaybeSignal;
 }
 
 /** Retries `task` with exponential backoff. Never retries an outer abort. */
 export async function retry<T>(task: Task<T>, opts: RetryOptions = {}): Promise<T> {
-  const { retries = 3, delay = 100, factor = 2, maxDelay = 30_000, jitter = 0, retryOn, attemptTimeout, signal } = opts;
+  const {
+    retries = 3,
+    delay = 100,
+    factor = 2,
+    maxDelay = 30_000,
+    jitter = 0,
+    retryOn,
+    attemptTimeout,
+    onRetry,
+    signal,
+  } = opts;
   let wait = delay;
   for (let attempt = 0; ; attempt++) {
     throwIfAborted(signal);
     const attemptCtrl = new AbortController();
     const link = linkSignals([attemptCtrl.signal, signal]);
-    const timer = attemptTimeout === undefined
-      ? undefined
-      : setTimeout(() => attemptCtrl.abort(timeoutError(`Attempt timed out after ${attemptTimeout}ms`)), attemptTimeout);
+    const timer =
+      attemptTimeout === undefined
+        ? undefined
+        : setTimeout(
+            () => attemptCtrl.abort(timeoutError(`Attempt timed out after ${attemptTimeout}ms`)),
+            attemptTimeout,
+          );
     try {
       return await task(link.signal);
     } catch (err) {
       if (signal?.aborted) throw signal.reason ?? err;
       const timedOut = attemptCtrl.signal.aborted;
-      const verdict = attempt < retries && (timedOut || !isAbort(err)) ? (retryOn?.(err, attempt) ?? true) : false;
+      const verdict =
+        attempt < retries && (timedOut || !isAbort(err)) ? (retryOn?.(err, attempt) ?? true) : false;
       if (verdict === false) throw err;
       const jittered = wait * (1 + (Math.random() * 2 - 1) * jitter);
       const delayMs = typeof verdict === 'number' ? verdict : Math.min(jittered, maxDelay);
+      onRetry?.(err, attempt, delayMs);
       await sleep(delayMs, signal);
       wait *= factor;
     } finally {

@@ -27,7 +27,10 @@ describe('on() with real DOM', () => {
     const c = new AbortController();
     const values: string[] = [];
     const loop = (async () => {
-      for await (const e of iter.pipe(on<InputEvent>(input, 'input', { signal: c.signal }), iter.debounce(30))) {
+      for await (const e of iter.pipe(
+        on<InputEvent>(input, 'input', { signal: c.signal }),
+        iter.debounce(30),
+      )) {
         values.push((e.target as HTMLInputElement).value);
       }
     })();
@@ -61,7 +64,9 @@ describe('schedule with real browser APIs', () => {
     let sum = 0;
     for await (const n of chunked(items, { budget: 2 })) {
       const end = performance.now() + 0.05;
-      while (performance.now() < end) { /* burn a little main-thread time */ }
+      while (performance.now() < end) {
+        /* burn a little main-thread time */
+      }
       sum += n;
     }
     expect(sum).toBe((1999 * 2000) / 2);

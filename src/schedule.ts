@@ -5,7 +5,10 @@ export type TaskPriority = 'user-blocking' | 'user-visible' | 'background';
 type G = typeof globalThis & {
   scheduler?: {
     yield?: () => Promise<void>;
-    postTask?: <T>(fn: () => T | Promise<T>, opts?: { priority?: TaskPriority; signal?: AbortSignal; delay?: number }) => Promise<T>;
+    postTask?: <T>(
+      fn: () => T | Promise<T>,
+      opts?: { priority?: TaskPriority; signal?: AbortSignal; delay?: number },
+    ) => Promise<T>;
   };
   requestIdleCallback?: (cb: (d: IdleDeadline) => void, opts?: { timeout?: number }) => number;
   cancelIdleCallback?: (id: number) => void;
@@ -57,7 +60,11 @@ export interface PostTaskOptions {
 }
 
 const PRIORITY_ORDER: TaskPriority[] = ['user-blocking', 'user-visible', 'background'];
-const fallbackQueues: Record<TaskPriority, Array<() => void>> = { 'user-blocking': [], 'user-visible': [], background: [] };
+const fallbackQueues: Record<TaskPriority, Array<() => void>> = {
+  'user-blocking': [],
+  'user-visible': [],
+  background: [],
+};
 let fallbackScheduled = false;
 
 function drainFallback(): void {
@@ -99,10 +106,7 @@ export function postTask<T>(fn: () => T | Promise<T>, opts: PostTaskOptions = {}
   });
 }
 
-function cancellable<T>(
-  signal: MaybeSignal,
-  start: (resolve: (v: T) => void) => () => void,
-): Promise<T> {
+function cancellable<T>(signal: MaybeSignal, start: (resolve: (v: T) => void) => () => void): Promise<T> {
   if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
   return new Promise<T>((resolve, reject) => {
     const cancel = start(v => {
@@ -133,7 +137,8 @@ export function idle(opts: IdleOptions = {}): Promise<IdleDeadline> {
     }
     const start = performance.now();
     const id = setTimeout(
-      () => resolve({ didTimeout: false, timeRemaining: () => Math.max(0, 50 - (performance.now() - start)) }),
+      () =>
+        resolve({ didTimeout: false, timeRemaining: () => Math.max(0, 50 - (performance.now() - start)) }),
       0,
     );
     return () => clearTimeout(id);

@@ -6,7 +6,12 @@ export type Release = () => void;
 /** Counting semaphore with cancellable, FIFO acquisition. */
 export class Semaphore {
   #free: number;
-  #queue: Array<{ resolve: (r: Release) => void; reject: (e: unknown) => void; signal?: MaybeSignal; onAbort?: () => void }> = [];
+  #queue: Array<{
+    resolve: (r: Release) => void;
+    reject: (e: unknown) => void;
+    signal?: MaybeSignal;
+    onAbort?: () => void;
+  }> = [];
 
   constructor(permits: number) {
     if (permits < 1) throw new RangeError('Semaphore needs at least one permit');
@@ -19,6 +24,13 @@ export class Semaphore {
 
   get pending(): number {
     return this.#queue.length;
+  }
+
+  /** Takes a permit if one is free, without waiting. */
+  tryAcquire(): Release | undefined {
+    if (this.#free === 0) return undefined;
+    this.#free--;
+    return this.#release();
   }
 
   acquire(signal?: MaybeSignal): Promise<Release> {
@@ -217,12 +229,15 @@ export class Queue {
   #signal: MaybeSignal;
   #waiting: QueueEntry[] = [];
   #running = 0;
+  #paused = false;
   #idleWaiters: Array<() => void> = [];
 
   constructor(opts: QueueOptions = {}) {
     this.#concurrency = Math.max(1, opts.concurrency ?? Infinity);
     this.#signal = opts.signal;
-    this.#signal?.addEventListener('abort', () => this.#flush(this.#signal!.reason ?? abortError()), { once: true });
+    this.#signal?.addEventListener('abort', () => this.#flush(this.#signal!.reason ?? abortError()), {
+      once: true,
+    });
   }
 
   /** Waiting tasks. */
@@ -233,6 +248,21 @@ export class Queue {
   /** Running tasks. */
   get pending(): number {
     return this.#running;
+  }
+
+  get paused(): boolean {
+    return this.#paused;
+  }
+
+  /** Stops starting new tasks. Running tasks continue; add() keeps queueing. */
+  pause(): void {
+    this.#paused = true;
+  }
+
+  resume(): void {
+    if (!this.#paused) return;
+    this.#paused = false;
+    this.#pump();
   }
 
   add<T>(task: Task<T>, signalOrOptions?: MaybeSignal | QueueAddOptions): Promise<T> {
@@ -292,7 +322,7 @@ export class Queue {
   }
 
   #pump(): void {
-    while (this.#running < this.#concurrency && this.#waiting.length > 0) {
+    while (!this.#paused && this.#running < this.#concurrency && this.#waiting.length > 0) {
       const entry = this.#waiting.shift()!;
       this.#running++;
       void entry.run().finally(() => {

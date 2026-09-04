@@ -1,11 +1,24 @@
 import { createPool, expose, wrap } from '../src/worker.js';
-import { mockWorker, fakeFetch, jsonResponse, streamResponse, tick, settle, expectAborted, fakeClock, portPair } from '../src/testing.js';
+import {
+  mockWorker,
+  fakeFetch,
+  jsonResponse,
+  streamResponse,
+  tick,
+  settle,
+  expectAborted,
+  fakeClock,
+  portPair,
+} from '../src/testing.js';
 import { sleep, isAbort } from '../src/signal.js';
 import { retry } from '../src/combine.js';
 
 const api = {
   add: async (a: number, b: number) => a + b,
-  slow: async (ms: number, opts: { signal: AbortSignal }) => { await sleep(ms, opts.signal); return 'done'; },
+  slow: async (ms: number, opts: { signal: AbortSignal }) => {
+    await sleep(ms, opts.signal);
+    return 'done';
+  },
 };
 
 describe('mockWorker', () => {
@@ -20,11 +33,21 @@ describe('mockWorker', () => {
 
 describe('createPool', () => {
   test('dispatches calls across workers with bounded concurrency', async () => {
-    let active = 0, peak = 0;
-    const factory = () => mockWorker({
-      job: async (ms: number, o: { signal: AbortSignal }) => { active++; peak = Math.max(peak, active); await sleep(ms, o.signal); active--; return ms; },
+    let active = 0,
+      peak = 0;
+    const factory = () =>
+      mockWorker({
+        job: async (ms: number, o: { signal: AbortSignal }) => {
+          active++;
+          peak = Math.max(peak, active);
+          await sleep(ms, o.signal);
+          active--;
+          return ms;
+        },
+      });
+    const pool = createPool<{ job: (ms: number, o: { signal: AbortSignal }) => Promise<number> }>(factory, {
+      size: 2,
     });
-    const pool = createPool<{ job: (ms: number, o: { signal: AbortSignal }) => Promise<number> }>(factory, { size: 2 });
     const c = new AbortController();
     const results = await Promise.all([10, 10, 10, 10].map(ms => pool.api.job(ms, { signal: c.signal })));
     expect(results).toEqual([10, 10, 10, 10]);
@@ -38,7 +61,10 @@ describe('createPool', () => {
     expect(factory).toHaveBeenCalledTimes(0);
     await pool.api.add(1, 1);
     expect(factory).toHaveBeenCalledTimes(1);
-    await Promise.all([pool.api.slow(5, { signal: new AbortController().signal }), pool.api.slow(5, { signal: new AbortController().signal })]);
+    await Promise.all([
+      pool.api.slow(5, { signal: new AbortController().signal }),
+      pool.api.slow(5, { signal: new AbortController().signal }),
+    ]);
     expect(factory).toHaveBeenCalledTimes(2);
     pool.dispose();
   });
@@ -70,7 +96,19 @@ describe('createPool', () => {
   test('dispose terminates workers and rejects new calls', async () => {
     const terminated: number[] = [];
     let n = 0;
-    const pool = createPool<typeof api>(() => { const id = ++n; const w = mockWorker(api); const t = w.terminate.bind(w); w.terminate = () => { terminated.push(id); t(); }; return w; }, { size: 2 });
+    const pool = createPool<typeof api>(
+      () => {
+        const id = ++n;
+        const w = mockWorker(api);
+        const t = w.terminate.bind(w);
+        w.terminate = () => {
+          terminated.push(id);
+          t();
+        };
+        return w;
+      },
+      { size: 2 },
+    );
     await pool.api.add(1, 1);
     pool.dispose();
     expect(terminated).toEqual([1]);
@@ -122,7 +160,12 @@ describe('testing helpers', () => {
     const clock = fakeClock(vi);
     clock.install();
     try {
-      const p = retry(async () => { throw new Error('always'); }, { retries: 2, delay: 100 });
+      const p = retry(
+        async () => {
+          throw new Error('always');
+        },
+        { retries: 2, delay: 100 },
+      );
       const rejection = clock.rejection(p);
       await clock.tick(100);
       await clock.tick(200);
@@ -136,6 +179,8 @@ describe('testing helpers', () => {
     const stop = expose(api, pair.a);
     const remote = wrap<typeof api>(pair.b);
     await expect(remote.add(4, 5)).resolves.toBe(9);
-    remote[Symbol.dispose](); stop(); pair.close();
+    remote[Symbol.dispose]();
+    stop();
+    pair.close();
   });
 });

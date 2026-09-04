@@ -1,9 +1,24 @@
-import { pipe, map, take, toArray, distinctUntilChanged, scan, tap, merge, flatMap, timeout, fromReadableStream } from '../src/iter.js';
+import {
+  pipe,
+  map,
+  take,
+  toArray,
+  distinctUntilChanged,
+  scan,
+  tap,
+  merge,
+  flatMap,
+  timeout,
+  fromReadableStream,
+} from '../src/iter.js';
 import { Channel, select } from '../src/events.js';
 import { sleep, isAbort } from '../src/signal.js';
 
 async function* from<T>(items: T[], delay = 0): AsyncGenerator<T> {
-  for (const i of items) { if (delay) await sleep(delay); yield i; }
+  for (const i of items) {
+    if (delay) await sleep(delay);
+    yield i;
+  }
 }
 
 describe('distinctUntilChanged', () => {
@@ -11,21 +26,40 @@ describe('distinctUntilChanged', () => {
     expect(await toArray(pipe(from([1, 1, 2, 2, 2, 1]), distinctUntilChanged()))).toEqual([1, 2, 1]);
   });
   test('accepts a comparator', async () => {
-    const out = await toArray(pipe(from([{ id: 1 }, { id: 1 }, { id: 2 }]), distinctUntilChanged((a, b) => a.id === b.id)));
+    const out = await toArray(
+      pipe(
+        from([{ id: 1 }, { id: 1 }, { id: 2 }]),
+        distinctUntilChanged((a, b) => a.id === b.id),
+      ),
+    );
     expect(out).toEqual([{ id: 1 }, { id: 2 }]);
   });
 });
 
 describe('scan', () => {
   test('emits running accumulations', async () => {
-    expect(await toArray(pipe(from([1, 2, 3]), scan((acc, n) => acc + n, 0)))).toEqual([1, 3, 6]);
+    expect(
+      await toArray(
+        pipe(
+          from([1, 2, 3]),
+          scan((acc, n) => acc + n, 0),
+        ),
+      ),
+    ).toEqual([1, 3, 6]);
   });
 });
 
 describe('tap', () => {
   test('observes without changing the stream', async () => {
     const seen: number[] = [];
-    expect(await toArray(pipe(from([1, 2]), tap(n => seen.push(n))))).toEqual([1, 2]);
+    expect(
+      await toArray(
+        pipe(
+          from([1, 2]),
+          tap(n => seen.push(n)),
+        ),
+      ),
+    ).toEqual([1, 2]);
     expect(seen).toEqual([1, 2]);
   });
 });
@@ -35,15 +69,29 @@ describe('merge', () => {
     const a = new Channel<string>(10);
     const b = new Channel<string>(10);
     const out = toArray(merge(a, b));
-    await a.send('a1'); await b.send('b1'); await a.send('a2');
-    a.close(); b.close();
+    await a.send('a1');
+    await b.send('b1');
+    await a.send('a2');
+    a.close();
+    b.close();
     expect((await out).toSorted((x, y) => x.localeCompare(y))).toEqual(['a1', 'a2', 'b1']);
   });
   test('an error in one source fails the merged stream and stops the others', async () => {
     vi.useFakeTimers();
     let stopped = false;
-    async function* bad() { yield 1; throw new Error('bad'); }
-    async function* slow() { try { yield 'x'; await sleep(1000); yield 'y'; } finally { stopped = true; } }
+    async function* bad() {
+      yield 1;
+      throw new Error('bad');
+    }
+    async function* slow() {
+      try {
+        yield 'x';
+        await sleep(1000);
+        yield 'y';
+      } finally {
+        stopped = true;
+      }
+    }
     const p = toArray(merge(bad(), slow()));
     await expect(p).rejects.toThrow('bad');
     // the generator is parked in sleep(); return() is queued behind it and runs once it wakes
@@ -55,9 +103,11 @@ describe('merge', () => {
 
 describe('flatMap', () => {
   test('maps to inner async iterables with bounded concurrency', async () => {
-    let active = 0, peak = 0;
+    let active = 0,
+      peak = 0;
     async function* inner(n: number) {
-      active++; peak = Math.max(peak, active);
+      active++;
+      peak = Math.max(peak, active);
       await sleep(5);
       yield n * 10;
       active--;
@@ -67,7 +117,12 @@ describe('flatMap', () => {
     expect(peak).toBe(2);
   });
   test('accepts a mapper returning a promise', async () => {
-    const out = await toArray(pipe(from([1, 2]), flatMap(async n => n + 1)));
+    const out = await toArray(
+      pipe(
+        from([1, 2]),
+        flatMap(async n => n + 1),
+      ),
+    );
     expect(out.toSorted((x, y) => x - y)).toEqual([2, 3]);
   });
 });
@@ -94,8 +149,15 @@ describe('fromReadableStream', () => {
   test('iterates a ReadableStream and cancels it on early exit', async () => {
     let cancelled = false;
     const rs = new ReadableStream<number>({
-      start(c) { c.enqueue(1); c.enqueue(2); c.enqueue(3); c.close(); },
-      cancel() { cancelled = true; },
+      start(c) {
+        c.enqueue(1);
+        c.enqueue(2);
+        c.enqueue(3);
+        c.close();
+      },
+      cancel() {
+        cancelled = true;
+      },
     });
     expect(await toArray(pipe(fromReadableStream(rs), take(2)))).toEqual([1, 2]);
     expect(cancelled).toBe(true);
@@ -104,9 +166,20 @@ describe('fromReadableStream', () => {
 
 describe('pipe arity', () => {
   test('supports up to nine operators with types intact', async () => {
-    const out = await toArray(pipe(from([1, 2, 3, 4, 5, 6]),
-      map(n => n + 1), map(n => n * 2), map(String), map(s => s.length), map(n => n + 1),
-      map(n => n * 3), map(n => n - 1), map(n => [n]), map(a => a[0]!)));
+    const out = await toArray(
+      pipe(
+        from([1, 2, 3, 4, 5, 6]),
+        map(n => n + 1),
+        map(n => n * 2),
+        map(String),
+        map(s => s.length),
+        map(n => n + 1),
+        map(n => n * 3),
+        map(n => n - 1),
+        map(n => [n]),
+        map(a => a[0]!),
+      ),
+    );
     expect(out).toHaveLength(6);
   });
 });
@@ -137,8 +210,10 @@ describe('Channel.select', () => {
     await expect(p).rejects.toSatisfy(isAbort);
   });
   test('resolves closed when every channel is closed and empty', async () => {
-    const a = new Channel<number>(); a.close();
-    const b = new Channel<number>(); b.close();
+    const a = new Channel<number>();
+    a.close();
+    const b = new Channel<number>();
+    b.close();
     expect(await select([a, b])).toEqual({ index: -1, closed: true });
   });
 });

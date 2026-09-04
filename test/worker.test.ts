@@ -3,7 +3,9 @@ import { isAbort, sleep } from '../src/signal.js';
 
 const api = {
   add: async (a: number, b: number) => a + b,
-  fail: async () => { throw new RangeError('out of range'); },
+  fail: async () => {
+    throw new RangeError('out of range');
+  },
   slow: async (ms: number, opts: { signal: AbortSignal }) => {
     try {
       await sleep(ms, opts.signal);
@@ -14,7 +16,10 @@ const api = {
       throw e;
     }
   },
-  slowPositional: async (ms: number, signal: AbortSignal) => { await sleep(ms, signal); return 'done'; },
+  slowPositional: async (ms: number, signal: AbortSignal) => {
+    await sleep(ms, signal);
+    return 'done';
+  },
   echoSignalType: async (signal: AbortSignal) => signal instanceof AbortSignal,
   unclonable: async () => () => 1,
 };

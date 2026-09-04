@@ -189,3 +189,20 @@ function load(img: HTMLImageElement, visible: boolean) {
 
 Среди ожидающих первым стартует задача с большим `priority`, при равенстве порядок FIFO.
 Уже выполняющиеся задачи приоритет не трогает.
+
+## pause и resume
+
+Остановить фоновые загрузки, пока пользователь скроллит:
+
+```ts
+const prefetch = new Queue({ concurrency: 3 });
+let idleTimer: ReturnType<typeof setTimeout>;
+window.addEventListener('scroll', () => {
+  prefetch.pause();
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => prefetch.resume(), 300);
+}, { passive: true, signal: scope.signal });
+```
+
+`pause` не трогает выполняющиеся задачи и не мешает `add`. `Semaphore.tryAcquire()` даёт
+разрешение без ожидания или `undefined`, когда всё занято.

@@ -22,6 +22,17 @@ Svelte 5: руны это компилятор, поэтому перезапу�
 </script>
 ```
 
+Для состояния загрузки есть `asyncStore`: обычный Svelte-store со статусом, `refresh()` для
+перезапуска из `$effect` и `scope`, привязанный к компоненту:
+
+```svelte
+<script lang="ts">
+  const user = asyncStore(scope => http.get(`/users/${id}`, { scope }));
+  $effect(() => { void id; user.refresh(); });
+</script>
+{#if $user.status === 'success'}{$user.data.name}{/if}
+```
+
 ## Svelte 5 (runes)
 
 ```ts

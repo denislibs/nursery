@@ -13,12 +13,36 @@ export interface OnOptions extends AddEventListenerOptions {
  * Events that arrive while the consumer is busy are queued. The listener is removed when the
  * consumer breaks out of the loop or the signal aborts; abort ends the loop instead of throwing.
  */
-export function on<K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, opts?: OnOptions): AsyncIterable<HTMLElementEventMap[K]>;
-export function on<K extends keyof DocumentEventMap>(target: Document, type: K, opts?: OnOptions): AsyncIterable<DocumentEventMap[K]>;
-export function on<K extends keyof WindowEventMap>(target: Window, type: K, opts?: OnOptions): AsyncIterable<WindowEventMap[K]>;
-export function on<K extends keyof WebSocketEventMap>(target: WebSocket, type: K, opts?: OnOptions): AsyncIterable<WebSocketEventMap[K]>;
-export function on<K extends keyof WorkerEventMap>(target: Worker, type: K, opts?: OnOptions): AsyncIterable<WorkerEventMap[K]>;
-export function on<E extends Event = Event>(target: EventTarget, type: string, opts?: OnOptions): AsyncIterable<E>;
+export function on<K extends keyof HTMLElementEventMap>(
+  target: HTMLElement,
+  type: K,
+  opts?: OnOptions,
+): AsyncIterable<HTMLElementEventMap[K]>;
+export function on<K extends keyof DocumentEventMap>(
+  target: Document,
+  type: K,
+  opts?: OnOptions,
+): AsyncIterable<DocumentEventMap[K]>;
+export function on<K extends keyof WindowEventMap>(
+  target: Window,
+  type: K,
+  opts?: OnOptions,
+): AsyncIterable<WindowEventMap[K]>;
+export function on<K extends keyof WebSocketEventMap>(
+  target: WebSocket,
+  type: K,
+  opts?: OnOptions,
+): AsyncIterable<WebSocketEventMap[K]>;
+export function on<K extends keyof WorkerEventMap>(
+  target: Worker,
+  type: K,
+  opts?: OnOptions,
+): AsyncIterable<WorkerEventMap[K]>;
+export function on<E extends Event = Event>(
+  target: EventTarget,
+  type: string,
+  opts?: OnOptions,
+): AsyncIterable<E>;
 export function on<E extends Event = Event>(
   target: EventTarget,
   type: string,
@@ -92,7 +116,11 @@ export type AnyChannel = Channel<any>;
 type SelectAny = { index: number; value: unknown } | { index: -1; closed: true };
 
 export type SelectResult<T extends readonly AnyChannel[]> =
-  | { [K in keyof T]: T[K] extends Channel<infer V> ? { index: K extends `${infer N extends number}` ? N : number; value: V } : never }[number]
+  | {
+      [K in keyof T]: T[K] extends Channel<infer V>
+        ? { index: K extends `${infer N extends number}` ? N : number; value: V }
+        : never;
+    }[number]
   | { index: -1; closed: true };
 
 /**
@@ -205,7 +233,10 @@ export class Channel<T> implements AsyncIterable<T> {
    * Waits for the first channel that can deliver a value (Go's select). Nothing is consumed
    * from the others. Resolves `{ index: -1, closed: true }` once every channel is closed and empty.
    */
-  static select<const T extends readonly AnyChannel[]>(channels: T, signal?: MaybeSignal): Promise<SelectResult<T>> {
+  static select<const T extends readonly AnyChannel[]>(
+    channels: T,
+    signal?: MaybeSignal,
+  ): Promise<SelectResult<T>> {
     return Channel.#selectAny(channels, signal) as Promise<SelectResult<T>>;
   }
 
@@ -294,7 +325,12 @@ export class Channel<T> implements AsyncIterable<T> {
     };
   }
 
-  #waiter<V>(resolve: (v: V) => void, reject: (e: unknown) => void, signal: MaybeSignal, list: Waiter<V>[]): Waiter<V> {
+  #waiter<V>(
+    resolve: (v: V) => void,
+    reject: (e: unknown) => void,
+    signal: MaybeSignal,
+    list: Waiter<V>[],
+  ): Waiter<V> {
     const entry: Waiter<V> = { resolve, reject, detach: () => {} };
     if (signal) {
       const onAbort = () => {

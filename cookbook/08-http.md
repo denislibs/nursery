@@ -262,3 +262,20 @@ http.get('/health', { scope, baseUrl: 'https://status.example.com' });
 
 `onUploadProgress` стримит тело с `duplex: 'half'` кусками по 64 KiB. Это работает в Chromium и
 Node; там, где потоковые тела не поддерживаются, прогресс придёт один раз в конце.
+
+## SSE: реконнект с backoff
+
+```ts
+for await (const e of http.sse('/events', {
+  scope,
+  reconnect: {
+    delay: 1000, factor: 2, maxDelay: 30_000,
+    onRetry: (err, attempt, delayMs) => log.warn('sse reconnect', { err, attempt, delayMs }),
+  },
+})) handle(e);
+```
+
+Переподключение происходит и на чистое завершение потока, и на ошибки: обрыв сети, таймаут
+попытки, статусы 408/425/429/5xx. 4xx кроме 429 бросается наружу. После успешного соединения
+backoff сбрасывается, поле `retry:` от сервера задаёт базовую задержку. Отмена сигнала
+останавливает всё.

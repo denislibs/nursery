@@ -31,8 +31,8 @@ import { createHttp } from 'scopekit/http';
 |---|---|
 | `signal` | `isAbort`, `abortError`, `timeoutError`, `throwIfAborted`, `anySignal`, `linkSignals`, `manualAnySignal`, `timeoutSignal`, `sleep` |
 | `combine` | `withTimeout`, `retry`, `race`, `settle` |
-| `limit` | `Semaphore`, `Mutex`, `map`, `mapSettled`, `Queue` |
-| `latest` | `latest`, `singleFlight` |
+| `limit` | `Semaphore` (+ `tryAcquire`), `Mutex`, `map`, `mapSettled`, `Queue` (+ `pause`/`resume`, priority) |
+| `latest` | `latest`, `latestBy`, `singleFlight` |
 | `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError`, `ScopeStuckError` |
 | `events` | `on`, `Channel` (+ `trySend`, `tryReceive`), `select`, `ChannelClosedError` |
 | `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `zip`, `combineLatest`, `share`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
@@ -43,7 +43,7 @@ import { createHttp } from 'scopekit/http';
 | `react` | `ScopeProvider`, `useScope`, `useScopedEffect`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
 | `vue` | `useScope`, `useScopedWatch`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
 | `solid` | `createScope`, `scopedEffect`, `createAsync`, `createLatest`, `createEventStream`, `createWorker` |
-| `svelte` | `useScope`, `scopedEffect`, `useLatest`, `eventStream`, `useWorker` |
+| `svelte` | `useScope`, `scopedEffect`, `asyncStore`, `useLatest`, `eventStream`, `useWorker` |
 | `angular` | `injectScope`, `scopedEffect`, `injectAsync`, `injectLatest`, `injectEventStream`, `injectWorker` |
 
 ## Scope
@@ -213,5 +213,6 @@ await expectAborted(scope.spawn(sig => sleep(1000, sig)));
 ## Разработка
 
 ```bash
-npm run check   # typecheck + tests + build
+npm run check   # oxfmt --check, oxlint, typecheck, tests (node + chromium), build
+npm run format
 ```

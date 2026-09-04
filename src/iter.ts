@@ -6,13 +6,69 @@ export type Op<T, R> = (source: AsyncIterable<T>) => AsyncIterable<R>;
 export function pipe<A>(src: AsyncIterable<A>): AsyncIterable<A>;
 export function pipe<A, B>(src: AsyncIterable<A>, a: Op<A, B>): AsyncIterable<B>;
 export function pipe<A, B, C>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>): AsyncIterable<C>;
-export function pipe<A, B, C, D>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>): AsyncIterable<D>;
-export function pipe<A, B, C, D, E>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>): AsyncIterable<E>;
-export function pipe<A, B, C, D, E, F>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>): AsyncIterable<F>;
-export function pipe<A, B, C, D, E, F, G>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>): AsyncIterable<G>;
-export function pipe<A, B, C, D, E, F, G, H>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>): AsyncIterable<H>;
-export function pipe<A, B, C, D, E, F, G, H, I>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>, h: Op<H, I>): AsyncIterable<I>;
-export function pipe<A, B, C, D, E, F, G, H, I, J>(src: AsyncIterable<A>, a: Op<A, B>, b: Op<B, C>, c: Op<C, D>, d: Op<D, E>, e: Op<E, F>, f: Op<F, G>, g: Op<G, H>, h: Op<H, I>, i: Op<I, J>): AsyncIterable<J>;
+export function pipe<A, B, C, D>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+): AsyncIterable<D>;
+export function pipe<A, B, C, D, E>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+): AsyncIterable<E>;
+export function pipe<A, B, C, D, E, F>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+  e: Op<E, F>,
+): AsyncIterable<F>;
+export function pipe<A, B, C, D, E, F, G>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+  e: Op<E, F>,
+  f: Op<F, G>,
+): AsyncIterable<G>;
+export function pipe<A, B, C, D, E, F, G, H>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+  e: Op<E, F>,
+  f: Op<F, G>,
+  g: Op<G, H>,
+): AsyncIterable<H>;
+export function pipe<A, B, C, D, E, F, G, H, I>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+  e: Op<E, F>,
+  f: Op<F, G>,
+  g: Op<G, H>,
+  h: Op<H, I>,
+): AsyncIterable<I>;
+export function pipe<A, B, C, D, E, F, G, H, I, J>(
+  src: AsyncIterable<A>,
+  a: Op<A, B>,
+  b: Op<B, C>,
+  c: Op<C, D>,
+  d: Op<D, E>,
+  e: Op<E, F>,
+  f: Op<F, G>,
+  g: Op<G, H>,
+  h: Op<H, I>,
+  i: Op<I, J>,
+): AsyncIterable<J>;
 export function pipe(src: AsyncIterable<unknown>, ...ops: Op<unknown, unknown>[]): AsyncIterable<unknown> {
   return ops.reduce((acc, op) => op(acc), src);
 }
@@ -212,7 +268,9 @@ export function tap<T>(fn: (value: T, index: number) => unknown): Op<T, T> {
 type ValueOf<S> = S extends AsyncIterable<infer V> ? V : never;
 
 /** Interleaves several sources as they produce. Ends when all end; one failure fails all. */
-export function merge<const S extends readonly AsyncIterable<unknown>[]>(...sources: S): AsyncIterable<ValueOf<S[number]>> {
+export function merge<const S extends readonly AsyncIterable<unknown>[]>(
+  ...sources: S
+): AsyncIterable<ValueOf<S[number]>> {
   type T = ValueOf<S[number]>;
   return bridge<T>(sink => {
     let open = sources.length;
@@ -432,12 +490,24 @@ interface Subscriber<T> {
   wake?: () => void;
 }
 
+export interface ShareOptions {
+  /**
+   * After the source ended (or the last consumer left), start it again for the next consumer.
+   * Requires a factory so a fresh iterable can be produced. Off by default: late consumers get done.
+   */
+  resubscribe?: boolean;
+}
+
 /**
  * Multicasts one source to any number of consumers: the source is pulled once, each consumer
  * sees values from the moment it joins. The source starts with the first consumer and is
- * stopped when the last one leaves.
+ * stopped when the last one leaves. Pass a factory (`() => source`) to allow `resubscribe`.
  */
-export function share<T>(source: AsyncIterable<T>): AsyncIterable<T> {
+export function share<T>(
+  source: AsyncIterable<T> | (() => AsyncIterable<T>),
+  opts: ShareOptions = {},
+): AsyncIterable<T> {
+  const factory = typeof source === 'function' ? source : () => source;
   const subscribers = new Set<Subscriber<T>>();
   let stop: (() => void) | undefined;
   let finished: { failure?: { err: unknown } } | undefined;
@@ -450,14 +520,17 @@ export function share<T>(source: AsyncIterable<T>): AsyncIterable<T> {
     }
   };
   const start = () => {
-    stop = consume(source, {
+    finished = undefined;
+    stop = consume(factory(), {
       value: v => broadcast(s => s.queue.push(v)),
       end: () => {
         finished = {};
+        stop = undefined;
         broadcast(s => (s.done = true));
       },
       error: err => {
         finished = { failure: { err } };
+        stop = undefined;
         broadcast(s => {
           s.failure = { err };
           s.done = true;
@@ -467,14 +540,16 @@ export function share<T>(source: AsyncIterable<T>): AsyncIterable<T> {
   };
   const leave = (s: Subscriber<T>) => {
     subscribers.delete(s);
-    if (subscribers.size === 0 && stop && !finished) {
+    if (subscribers.size === 0 && stop) {
       stop();
       stop = undefined;
+      finished = {};
     }
   };
 
   return {
     [Symbol.asyncIterator](): AsyncIterableIterator<T> {
+      if (finished && opts.resubscribe) finished = undefined;
       const sub: Subscriber<T> = { queue: [], done: finished !== undefined, failure: finished?.failure };
       if (!finished) {
         subscribers.add(sub);

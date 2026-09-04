@@ -17,7 +17,10 @@ describe('on', () => {
     target.dispatchEvent(new CustomEvent('msg', { detail: 'a' }));
     target.dispatchEvent(new CustomEvent('msg', { detail: 'b' }));
     target.dispatchEvent(new CustomEvent('msg', { detail: 'c' }));
-    await tick(); await tick(); await tick(); await tick();
+    await tick();
+    await tick();
+    await tick();
+    await tick();
     c.abort();
     await loop;
     expect(seen).toEqual(['a', 'b', 'c']);
@@ -155,7 +158,9 @@ describe('Channel', () => {
     const ch = new Channel<number>(5);
     await ch.send(1);
     await ch.send(2);
-    for await (const v of ch) { if (v === 1) break; }
+    for await (const v of ch) {
+      if (v === 1) break;
+    }
     expect(ch.closed).toBe(true);
   });
 
@@ -164,13 +169,19 @@ describe('Channel', () => {
     const ch = new Channel<number>(1);
     const produced: number[] = [];
     const producer = (async () => {
-      for (let i = 0; i < 5; i++) { await ch.send(i); produced.push(i); }
+      for (let i = 0; i < 5; i++) {
+        await ch.send(i);
+        produced.push(i);
+      }
       ch.close();
     })();
     await vi.advanceTimersByTimeAsync(0);
     expect(produced.length).toBeLessThanOrEqual(2);
     const consumed: number[] = [];
-    for await (const v of ch) { consumed.push(v); await vi.advanceTimersByTimeAsync(10); }
+    for await (const v of ch) {
+      consumed.push(v);
+      await vi.advanceTimersByTimeAsync(10);
+    }
     await producer;
     expect(consumed).toEqual([0, 1, 2, 3, 4]);
     vi.useRealTimers();

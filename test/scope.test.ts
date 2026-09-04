@@ -19,7 +19,9 @@ describe('Scope', () => {
   test('a failing child aborts its siblings with an AbortError caused by the failure', async () => {
     const scope = new Scope();
     const boom = new Error('boom');
-    const failing = scope.spawn(async () => { throw boom; });
+    const failing = scope.spawn(async () => {
+      throw boom;
+    });
     const sibling = scope.spawn(sig => sleep(1000, sig));
     await expect(failing).rejects.toBe(boom);
     await expect(sibling).rejects.toSatisfy((e: unknown) => isAbort(e) && (e as Error).cause === boom);
@@ -29,7 +31,12 @@ describe('Scope', () => {
   test('an aborted child does not count as a failure', async () => {
     const scope = new Scope();
     const c = new AbortController();
-    const p = scope.spawn(sig => sleep(1000, sig).catch(() => { c.abort(); throw c.signal.reason; }));
+    const p = scope.spawn(sig =>
+      sleep(1000, sig).catch(() => {
+        c.abort();
+        throw c.signal.reason;
+      }),
+    );
     c.abort();
     const other = scope.spawn(async () => 'fine');
     scope.abort();
@@ -39,10 +46,12 @@ describe('Scope', () => {
   });
 
   test('unawaited failing spawn does not produce an unhandled rejection', async () => {
-    const off = Scope.onUnhandled(() => {});   // reported through the hook, not the platform
+    const off = Scope.onUnhandled(() => {}); // reported through the hook, not the platform
     try {
       const scope = new Scope();
-      scope.spawn(async () => { throw new Error('ignored by caller'); });
+      scope.spawn(async () => {
+        throw new Error('ignored by caller');
+      });
       await scope.settled();
       expect((scope.error as Error).message).toBe('ignored by caller');
       await new Promise(r => setTimeout(r, 0));
@@ -56,7 +65,11 @@ describe('Scope', () => {
     {
       await using scope = new Scope();
       scope.spawn(async sig => {
-        try { await sleep(1000, sig); } finally { log.push('child cleanup'); }
+        try {
+          await sleep(1000, sig);
+        } finally {
+          log.push('child cleanup');
+        }
       });
       log.push('leaving block');
     }
@@ -146,7 +159,13 @@ describe('Scope', () => {
     const log: string[] = [];
     const parent = new Scope();
     const child = parent.child();
-    child.spawn(async sig => { try { await sleep(1000, sig); } finally { log.push('grandchild done'); } });
+    child.spawn(async sig => {
+      try {
+        await sleep(1000, sig);
+      } finally {
+        log.push('grandchild done');
+      }
+    });
     await parent.close();
     expect(log).toEqual(['grandchild done']);
   });
@@ -155,8 +174,17 @@ describe('Scope', () => {
     const log: string[] = [];
     const scope = new Scope();
     scope.defer(() => log.push('first registered'));
-    scope.defer(async () => { await tick(); log.push('second registered'); });
-    scope.spawn(async sig => { try { await sleep(1000, sig); } finally { log.push('child'); } });
+    scope.defer(async () => {
+      await tick();
+      log.push('second registered');
+    });
+    scope.spawn(async sig => {
+      try {
+        await sleep(1000, sig);
+      } finally {
+        log.push('child');
+      }
+    });
     await scope.close();
     expect(log).toEqual(['child', 'second registered', 'first registered']);
   });
@@ -176,17 +204,28 @@ describe('Scope', () => {
 
   test('Scope.run rethrows the body error and cancels children', async () => {
     let childAborted = false;
-    await expect(Scope.run(async scope => {
-      scope.spawn(sig => sleep(1000, sig).catch(e => { childAborted = isAbort(e); throw e; }));
-      throw new Error('body failed');
-    })).rejects.toThrow('body failed');
+    await expect(
+      Scope.run(async scope => {
+        scope.spawn(sig =>
+          sleep(1000, sig).catch(e => {
+            childAborted = isAbort(e);
+            throw e;
+          }),
+        );
+        throw new Error('body failed');
+      }),
+    ).rejects.toThrow('body failed');
     expect(childAborted).toBe(true);
   });
 
   test('Scope.run: unawaited child failure surfaces as the run error when the body succeeds', async () => {
-    await expect(Scope.run(async scope => {
-      scope.spawn(async () => { throw new Error('child failed'); });
-      return 'ok';
-    })).rejects.toThrow('child failed');
+    await expect(
+      Scope.run(async scope => {
+        scope.spawn(async () => {
+          throw new Error('child failed');
+        });
+        return 'ok';
+      }),
+    ).rejects.toThrow('child failed');
   });
 });
