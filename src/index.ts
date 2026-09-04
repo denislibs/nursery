@@ -14,3 +14,5 @@ export * as iter from './iter.js';
 export type { Op, BufferSpec } from './iter.js';
 export { yieldToMain, idle, frame, chunked } from './schedule.js';
 export type { IdleOptions, ChunkedOptions } from './schedule.js';
+export { createHttp, HttpError } from './http.js';
+export type { Http, HttpOptions, RequestOptions, BodyOptions, Query } from './http.js';

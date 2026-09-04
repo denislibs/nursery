@@ -151,3 +151,18 @@ describe('settle', () => {
     expect(r.rejected.map(e => (e as Error).message)).toEqual(['no']);
   });
 });
+
+describe('retry delay override', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  test('retryOn may return a number to override the delay for that retry', async () => {
+    const times: number[] = [];
+    let n = 0;
+    const r = retry(async () => { times.push(Date.now()); if (++n < 3) throw new Error('x'); return 'ok'; },
+      { retries: 3, delay: 100, retryOn: (_e, attempt) => (attempt === 0 ? 1000 : true) });
+    await vi.runAllTimersAsync();
+    await expect(r).resolves.toBe('ok');
+    expect(times[1]! - times[0]!).toBe(1000);
+    expect(times[2]! - times[1]!).toBe(200);
+  });
+});

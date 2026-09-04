@@ -30,8 +30,11 @@ export interface RetryOptions {
   maxDelay?: number;
   /** Random jitter fraction in [0, 1] applied to each delay. Default 0. */
   jitter?: number;
-  /** Return false to stop retrying for this error. Abort errors are never retried. */
-  retryOn?: (err: unknown, attempt: number) => boolean;
+  /**
+   * Return false to stop retrying for this error, true to retry with the computed backoff,
+   * or a number of ms to retry after exactly that delay. Outer aborts are never retried.
+   */
+  retryOn?: (err: unknown, attempt: number) => boolean | number;
   /** Per-attempt timeout in ms. A timed-out attempt counts as a retryable failure. */
   attemptTimeout?: number;
   signal?: MaybeSignal;
@@ -53,10 +56,11 @@ export async function retry<T>(task: Task<T>, opts: RetryOptions = {}): Promise<
     } catch (err) {
       if (signal?.aborted) throw signal.reason ?? err;
       const timedOut = attemptCtrl.signal.aborted;
-      const canRetry = attempt < retries && (timedOut || !isAbort(err)) && (retryOn?.(err, attempt) ?? true);
-      if (!canRetry) throw err;
+      const verdict = attempt < retries && (timedOut || !isAbort(err)) ? (retryOn?.(err, attempt) ?? true) : false;
+      if (verdict === false) throw err;
       const jittered = wait * (1 + (Math.random() * 2 - 1) * jitter);
-      await sleep(Math.min(jittered, maxDelay), signal);
+      const delayMs = typeof verdict === 'number' ? verdict : Math.min(jittered, maxDelay);
+      await sleep(delayMs, signal);
       wait *= factor;
     } finally {
       clearTimeout(timer);
