@@ -217,3 +217,29 @@ for (;;) {
 ```
 
 Из проигравших каналов ничего не забирается: их значение остаётся следующему `receive`.
+
+## zip, combineLatest, share
+
+```ts
+import { zip, combineLatest, share } from 'scopekit/iter';
+
+for await (const [tick, price] of zip(ticks, prices)) plot(tick, price);       // по позиции
+for await (const [size, theme] of combineLatest(sizes, themes)) relayout(size, theme); // последнее из каждого
+
+const clicks = share(on<MouseEvent>(button, 'click', { signal }));     // один listener
+scope.spawn(async () => { for await (const e of clicks) analytics(e); });
+scope.spawn(async () => { for await (const e of pipe(clicks, throttle(500))) save(); });
+```
+
+`share` подписывается на источник при первом потребителе и отписывается, когда уходит последний.
+Поздний потребитель видит только новые значения.
+
+## trySend и tryReceive
+
+```ts
+if (!events.trySend(e)) dropped++;          // не ждать, если буфер полон
+const r = jobs.tryReceive();                 // { ok: true, value } | { ok: false }
+```
+
+Это единственный безопасный способ «отбросить при переполнении»: проверка `size` перед `send`
+это гонка.

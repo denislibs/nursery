@@ -1,7 +1,26 @@
 # Svelte, SolidJS, Angular, Web Components
 
-Во всех четырёх подход один: скоуп создаётся, когда компонент или эффект стартует,
-и закрывается в cleanup. Ниже минимальные адаптеры.
+Адаптеры поставляются как `scopekit/svelte`, `scopekit/solid` и `scopekit/angular`.
+Во всех подход один: скоуп создаётся, когда компонент или эффект стартует, и закрывается в
+cleanup. Ниже их использование и то, как они устроены внутри.
+
+```ts
+import { useScope, scopedEffect, useLatest, eventStream, useWorker } from 'scopekit/svelte';
+import { createScope, scopedEffect, createAsync, createLatest, createEventStream, createWorker } from 'scopekit/solid';
+import { injectScope, scopedEffect, injectAsync, injectLatest, injectEventStream, injectWorker } from 'scopekit/angular';
+```
+
+Svelte 5: руны это компилятор, поэтому перезапуск остаётся в вашем `$effect`, а `scopedEffect`
+и `eventStream` возвращают cleanup:
+
+```svelte
+<script lang="ts">
+  let { id } = $props();
+  let user = $state(null);
+  $effect(() => scopedEffect(async scope => { user = await http.get(`/users/${id}`, { scope }); }));
+  $effect(() => eventStream(button, 'click', onClick));
+</script>
+```
 
 ## Svelte 5 (runes)
 

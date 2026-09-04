@@ -23,13 +23,13 @@
 |---|---|---|
 | 10 | [10-react.md](10-react.md) | `scopekit/react`: `useScopedEffect`, `useAsync`, `useLatest`, `ScopeProvider`, Router, TanStack Query, Suspense |
 | 11 | [11-vue.md](11-vue.md) | `scopekit/vue`: `useScope`, `useScopedWatch`, `useAsync`, Pinia, Nuxt |
-| 12 | [12-svelte-solid-angular.md](12-svelte-solid-angular.md) | Svelte 5, SolidJS, Angular, Web Components, мост в RxJS |
+| 12 | [12-svelte-solid-angular.md](12-svelte-solid-angular.md) | `scopekit/svelte`, `scopekit/solid`, `scopekit/angular`, Web Components, мост в RxJS |
 
 ## Практика
 
 | | Файл | О чём |
 |---|---|---|
-| 13 | [13-testing.md](13-testing.md) | фейковые таймеры, проверка отмены, http без сети, воркеры в Node |
+| 13 | [13-testing.md](13-testing.md) | `scopekit/testing`, фейковые таймеры, проверка отмены, http без сети, воркеры в Node |
 | 14 | [14-migration.md](14-migration.md) | RxJS, p-*, axios/ky, Comlink, голый AbortController, TanStack Query |
 | 15 | [15-antipatterns.md](15-antipatterns.md) | что не делать и почему |
 | 16 | [16-observability.md](16-observability.md) | имена задач, `dump()`, `Scope.onUnhandled`, grace, дедлайн |

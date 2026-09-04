@@ -246,3 +246,19 @@ for await (const e of http.sse('/events', { scope, reconnect: { delay: 1000, max
 При обрыве без отмены и включённом `reconnect` соединение переоткрывается с `Last-Event-ID`,
 задержка берётся из поля `retry:`, если сервер его прислал. `break` из цикла отменяет тело
 ответа.
+
+## Прогресс, вложенный query, цепочка хуков
+
+```ts
+await http.post('/upload', { scope, body: file, onUploadProgress: (sent, total) => bar.value = sent / total });
+const res = await http.request('/big.bin', { scope, onDownloadProgress: (loaded, total) => ... });
+
+http.get('/items', { scope, query: { filter: { status: 'open', tags: ['a', 'b'] } } });
+// ?filter[status]=open&filter[tags]=a&filter[tags]=b   (или свой querySerializer)
+
+createHttp({ onRequest: [addAuth, addTrace, logRequest], baseUrl });
+http.get('/health', { scope, baseUrl: 'https://status.example.com' });
+```
+
+`onUploadProgress` стримит тело с `duplex: 'half'` кусками по 64 KiB. Это работает в Chromium и
+Node; там, где потоковые тела не поддерживаются, прогресс придёт один раз в конце.

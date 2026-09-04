@@ -63,3 +63,23 @@ async function withBudget(scope: Scope) {
   if (scope.remaining() < 500) throw timeoutError('Not enough time budget');
 }
 ```
+
+## Scope.current() и профилирование
+
+```ts
+await scope.spawn(async () => {
+  Scope.current();          // == scope в синхронной части задачи
+  await something();
+  Scope.current();          // undefined без AsyncContext, scope там, где он есть
+});
+scope.enter(() => Scope.current());   // явный вход
+```
+
+Правило: пробрасывайте скоуп аргументом, а `Scope.current()` используйте для диагностики и в
+местах, где аргумент физически не пробросить.
+
+```ts
+Scope.profiling = true;   // в dev
+// Performance-панель DevTools: measure 'scopekit:page/loadUser' с detail { scope, task, status }
+// и 'scopekit:page' на время жизни скоупа
+```

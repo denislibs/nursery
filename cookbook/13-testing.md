@@ -163,3 +163,30 @@ expect(await screen.findByText('Ann')).toBeInTheDocument();
 Node эмулирует `AbortSignal`, `DOMException`, `Response`, `MessageChannel`, но не `Worker`,
 не DOM и не `scheduler.yield`. Для них vitest browser mode с Playwright, конфиг в
 `vitest.config.ts` этого репозитория: тот же набор тестов гоняется и в Node, и в Chromium.
+
+## scopekit/testing
+
+Хелперы, которые иначе приходится писать в каждом проекте:
+
+```ts
+import { fakeFetch, jsonResponse, streamResponse, mockWorker, expectAborted, settle, fakeClock, tick } from 'scopekit/testing';
+
+const f = fakeFetch({
+  'GET /users/:id': ({ params }) => ({ id: params.id }),               // объект → JSON 200
+  'POST /users': () => jsonResponse({ ok: true }, { status: 201 }),
+  '/events': () => streamResponse(['data: a\n\n', 'data: b\n\n'], { headers: { 'content-type': 'text/event-stream' } }),
+});
+const http = createHttp({ fetch: f.fetch });
+f.calls[0].headers.get('authorization');
+
+const remote = wrap<typeof api>(mockWorker(api));   // тот же протокол, без Worker
+const pool = createPool(() => mockWorker(api), { size: 2 });
+
+const reason = await expectAborted(promise);         // бросит, если промис не был отменён
+const clock = fakeClock(vi);
+clock.install();
+const rejection = clock.rejection(retry(...));       // обработчик навешен до продвижения времени
+await clock.tick(1000);
+expect((await rejection).message).toBe('...');
+clock.uninstall();
+```

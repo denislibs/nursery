@@ -34,13 +34,17 @@ import { createHttp } from 'scopekit/http';
 | `limit` | `Semaphore`, `Mutex`, `map`, `mapSettled`, `Queue` |
 | `latest` | `latest`, `singleFlight` |
 | `scope` | `Scope`, `contextKey`, `ContextKey`, `ScopeClosedError`, `ScopeStuckError` |
-| `events` | `on`, `Channel`, `select`, `ChannelClosedError` |
-| `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
+| `events` | `on`, `Channel` (+ `trySend`, `tryReceive`), `select`, `ChannelClosedError` |
+| `iter` | `pipe`, `map`, `filter`, `take`, `buffer`, `debounce`, `throttle`, `distinctUntilChanged`, `scan`, `tap`, `merge`, `zip`, `combineLatest`, `share`, `flatMap`, `timeout`, `fromReadableStream`, `toArray` (namespace `iter`) |
 | `schedule` | `yieldToMain`, `postTask`, `idle`, `frame`, `chunked` |
 | `http` | `createHttp`, `HttpError` |
-| `worker` | `expose`, `wrap`, `transfer`, `callback` |
+| `worker` | `expose`, `wrap`, `transfer`, `callback`, `createPool` |
+| `testing` | `fakeFetch`, `jsonResponse`, `streamResponse`, `textStream`, `tick`, `settle`, `expectAborted`, `fakeClock`, `portPair`, `mockWorker` |
 | `react` | `ScopeProvider`, `useScope`, `useScopedEffect`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
 | `vue` | `useScope`, `useScopedWatch`, `useAsync`, `useLatest`, `useEventStream`, `useWorker` |
+| `solid` | `createScope`, `scopedEffect`, `createAsync`, `createLatest`, `createEventStream`, `createWorker` |
+| `svelte` | `useScope`, `scopedEffect`, `useLatest`, `eventStream`, `useWorker` |
+| `angular` | `injectScope`, `scopedEffect`, `injectAsync`, `injectLatest`, `injectEventStream`, `injectWorker` |
 
 ## Scope
 
@@ -177,7 +181,7 @@ const ast = await parser.parse(src, { signal: scope.signal }); // abort дохо
 parser[Symbol.dispose]();
 ```
 
-## React и Vue
+## Фреймворки
 
 ```ts
 import { useAsync, useLatest, useEventStream } from 'scopekit/react';
@@ -192,7 +196,19 @@ import { useAsync, useLatest } from 'scopekit/vue';
 const { data, loading } = useAsync(scope => http.get<User>(`/users/${props.id}`, { scope }));
 ```
 
-Оба адаптера это optional peer dependencies, ставятся вместе с `react` или `vue`.
+Те же примитивы есть для Solid (`scopekit/solid`), Svelte 5 (`scopekit/svelte`) и Angular
+(`scopekit/angular`). Все адаптеры это optional peer dependencies.
+
+## Тесты
+
+```ts
+import { fakeFetch, mockWorker, expectAborted, fakeClock } from 'scopekit/testing';
+
+const f = fakeFetch({ 'GET /users/:id': ({ params }) => ({ id: params.id }) });
+const http = createHttp({ fetch: f.fetch });
+const remote = wrap<typeof api>(mockWorker(api));      // воркер без Worker
+await expectAborted(scope.spawn(sig => sleep(1000, sig)));
+```
 
 ## Разработка
 

@@ -188,3 +188,21 @@ await remote.index(files, {
 В воркере колбэк это async-функция: вызов уходит в главный поток, результат возвращается
 промисом. Колбэки живут, пока живёт вызов, который их принёс; после его завершения ссылки
 освобождаются.
+
+## Пул воркеров
+
+```ts
+import { createPool } from 'scopekit/worker';
+
+const pool = createPool<typeof api>(
+  () => new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' }),
+  { size: navigator.hardwareConcurrency ?? 4, signal: scope.signal },
+);
+
+const ast = await pool.api.parse(src, { signal });   // очередь, наименее занятый воркер
+pool.queued; pool.pending; pool.size;
+pool.dispose();                                        // или `using pool = createPool(...)`
+```
+
+Воркеры создаются лениво, до `size`. `AbortSignal` в аргументах снимает вызов с очереди, а
+если он уже выполняется, доезжает до воркера.
