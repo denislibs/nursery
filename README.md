@@ -9,6 +9,20 @@
 Компилятор: TypeScript 7 (нативный, на Go). `tsc` из пакета `typescript@7.0.2` — это
 платформенный бинарник из `@typescript/typescript-<os>-<arch>`, не JS.
 
+## Импорт
+
+Корневой вход `scopekit` реэкспортирует всё. Каждый модуль доступен и как subpath, это
+гарантирует tree-shaking в любом бандлере и позволяет не тянуть `http` и `worker` в общий чанк:
+
+```ts
+import { Scope } from 'scopekit';              // корень
+import { debounce } from 'scopekit/iter';      // subpath: только debounce и его зависимости
+import { createHttp } from 'scopekit/http';
+```
+
+Через корень namespace `iter` шейкается rolldown/rollup, но не esbuild, поэтому для операторов
+предпочтителен `scopekit/iter`.
+
 ## Модули
 
 | Модуль | Экспорты |

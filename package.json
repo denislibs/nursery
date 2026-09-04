@@ -17,6 +17,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "@vitest/browser-playwright": "^5.0.0",
     "oxlint": "^1.81.0",
     "oxlint-tsgolint": "^7.0.2001",
@@ -28,7 +29,48 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./signal": {
+      "types": "./dist/signal.d.ts",
+      "import": "./dist/signal.js"
+    },
+    "./combine": {
+      "types": "./dist/combine.d.ts",
+      "import": "./dist/combine.js"
+    },
+    "./limit": {
+      "types": "./dist/limit.d.ts",
+      "import": "./dist/limit.js"
+    },
+    "./latest": {
+      "types": "./dist/latest.d.ts",
+      "import": "./dist/latest.js"
+    },
+    "./scope": {
+      "types": "./dist/scope.d.ts",
+      "import": "./dist/scope.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "import": "./dist/events.js"
+    },
+    "./iter": {
+      "types": "./dist/iter.d.ts",
+      "import": "./dist/iter.js"
+    },
+    "./schedule": {
+      "types": "./dist/schedule.d.ts",
+      "import": "./dist/schedule.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
