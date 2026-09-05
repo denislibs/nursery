@@ -8,3 +8,6 @@ docs/api/dist/
 examples/*/node_modules/
 examples/*/dist/
 .claude/
+
+test/consumer-bundle/.out/
+.vitest/

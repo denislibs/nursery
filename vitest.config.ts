@@ -28,7 +28,7 @@ export default defineConfig({
       },
       {
         extends: true,
-        plugins: [svelte()],
+        plugins: [svelte({ configFile: false, compilerOptions: { runes: true } })],
         test: {
           name: 'browser',
           include: browserTests,

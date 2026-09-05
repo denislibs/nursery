@@ -19,9 +19,10 @@
     "build": "npm run build -w @nursery/core && npm run build -w @nursery/react -w @nursery/vue -w @nursery/solid -w @nursery/svelte -w @nursery/angular",
     "check:types-consumer": "node scripts/check-consumer-types.mjs",
     "check:pkg": "node scripts/check-packages.mjs",
+    "check:consumer-bundle": "node scripts/check-consumer-bundle.mjs",
     "check:cookbook": "node scripts/check-cookbook.mjs && node scripts/check-cookbook-compile.mjs",
     "size": "size-limit",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run check:cookbook && npm test && npm run build && npm run check:types-consumer && npm run check:pkg && npm run size",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run check:cookbook && npm test && npm run build && npm run check:types-consumer && npm run check:pkg && npm run check:consumer-bundle && npm run size",
     "docs:api": "npm --prefix docs/api install --no-audit --no-fund && npm --prefix docs/api run build",
     "example": "npm --prefix examples/playground install --no-audit --no-fund && npm --prefix examples/playground run dev",
     "showcase": "npm --prefix examples/showcase install --no-audit --no-fund && npm --prefix examples/showcase run dev"
@@ -51,8 +52,10 @@
     "solid-js": "^1.9.15",
     "svelte": "^5.57.0",
     "typescript": "7.0.2",
+    "vite": "^7.3.6",
     "vitest": "^5.0.0",
-    "vue": "^3.5.42"
+    "vue": "^3.5.42",
+    "webpack": "^5.110.3"
   },
   "size-limit": [
     {

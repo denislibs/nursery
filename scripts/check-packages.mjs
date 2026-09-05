@@ -9,9 +9,9 @@ let failed = false;
 for (const dir of readdirSync(join(repo, 'packages'))) {
   const cwd = join(repo, 'packages', dir);
   if (!existsSync(join(cwd, 'package.json'))) continue;
-  for (const [label, cmd, args] of [
-    ['publint', bin('publint'), ['--strict']],
-    ['attw', bin('attw'), ['--pack', '.', '--profile', 'esm-only']],
+  for (const { label, cmd, args } of [
+    { label: 'publint', cmd: bin('publint'), args: ['--strict'] },
+    { label: 'attw', cmd: bin('attw'), args: ['--pack', '.', '--profile', 'esm-only'] },
   ]) {
     const r = spawnSync(cmd, args, { cwd, encoding: 'utf8' });
     const ok = r.status === 0;

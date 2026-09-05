@@ -127,12 +127,15 @@ peer dependency; all of them are tested in a real browser, including React Stric
   `@types/node` alone. DOM-dependent entries reference the DOM lib themselves.
 - `await using` needs TypeScript 5.2+ and a transpiler that lowers it; `Nursery.run` is the
   equivalent without syntax support.
+- `Symbol.dispose` / `Symbol.asyncDispose` are polyfilled by `@nursery/core` itself (WebKit still
+  lacks them). The polyfill is the package's only side effect and survives tree-shaking; import
+  `@nursery/core/polyfill` explicitly if your own code uses `using` before touching the library.
 - Compiled with TypeScript 7 (the native Go compiler).
 
 ## Development
 
 ```bash
-npm run check   # oxfmt --check, oxlint, typecheck, tests (node + chromium), build, package checks
+npm run check   # oxfmt --check, oxlint, typecheck, tests (node + 3 browsers), build, package and consumer-bundle checks
 npm run format
 ```
 

@@ -55,6 +55,7 @@
   "ignorePatterns": [
     "dist/",
     "node_modules/",
-    "packages/*/dist/"
+    "packages/*/dist/",
+    "test/consumer-bundle/.out/"
   ]
 }

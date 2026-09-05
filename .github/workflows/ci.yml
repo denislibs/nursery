@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
       - run: npm run check:types-consumer
       - run: npm run check:pkg
+      - run: node scripts/check-consumer-bundle.mjs --static-only
       - run: npm run size
 
   browser:
@@ -47,3 +48,5 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser
+      - run: npm run build
+      - run: npm run check:consumer-bundle

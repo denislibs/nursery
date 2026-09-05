@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer.
 All packages in the monorepo share one version.
 
+## [Unreleased]
+
+### Fixed
+- `@nursery/core` declared `sideEffects: false`, so esbuild, Vite/rollup and webpack dropped the
+  `Symbol.dispose` polyfill from consumer bundles (and from the CDN bundle). The polyfill is now
+  listed as the package's only side effect, exported as `@nursery/core/polyfill`, and a new
+  `check:consumer-bundle` step bundles a consumer with all three bundlers and runs the result in
+  Chromium, Firefox and WebKit.
+
 ## [1.0.0-rc.1] - 2026-09-05
 
 First release candidate. Packages: `@nursery/core`, `@nursery/react`, `@nursery/vue`,

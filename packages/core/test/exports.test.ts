@@ -21,6 +21,7 @@ const modules = [
   'http',
   'worker',
   'testing',
+  'polyfill',
 ];
 
 describe('package exports map', () => {
